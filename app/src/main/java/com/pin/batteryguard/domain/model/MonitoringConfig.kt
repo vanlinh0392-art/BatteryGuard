@@ -16,7 +16,7 @@ data class MonitoringConfig(
     /** Hide system packages from the Applications tab by default. */
     val excludeSystemApps: Boolean = true,
     val isMonitoringEnabled: Boolean = true,
-    val enableAutoStartShizuku: Boolean = true,
+    val enableAutoStartShizuku: Boolean = false,
     val shizukuRetryMinutes: Int = 15
 ) {
     /**

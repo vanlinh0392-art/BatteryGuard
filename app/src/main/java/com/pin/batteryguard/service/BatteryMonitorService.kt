@@ -57,7 +57,6 @@ class BatteryMonitorService : LifecycleService() {
     @Inject lateinit var monitoringStateStore: MonitoringStateStore
     @Inject lateinit var uidPackageResolver: UidPackageResolver
     @Inject lateinit var protectionChecker: AppProtectionChecker
-    @Inject lateinit var shizukuAutoStarter: ShizukuAutoStarter
     @Inject lateinit var appShieldManager: com.pin.batteryguard.domain.shield.AppShieldManager
 
     private val stateMutex = Mutex()
@@ -95,17 +94,6 @@ class BatteryMonitorService : LifecycleService() {
                 updateNotification()
             }
         }
-
-        // Lắng nghe trạng thái Shizuku để tự động lập lịch retry khi mất kết nối
-        lifecycleScope.launch {
-            shizukuManager.status.collect { status ->
-                if (status != com.pin.batteryguard.shizuku.ShizukuStatus.READY && config.enableAutoStartShizuku) {
-                    scheduleShizukuRetry(config.shizukuRetryMinutes)
-                } else if (status == com.pin.batteryguard.shizuku.ShizukuStatus.READY) {
-                    cancelShizukuRetry()
-                }
-            }
-        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -114,7 +102,6 @@ class BatteryMonitorService : LifecycleService() {
             ACTION_PERIODIC_SCAN -> lifecycleScope.launch { stateMutex.withLock { runPeriodicScan() } }
             ACTION_COOL_DOWN -> lifecycleScope.launch { stateMutex.withLock { coolDownDevice() } }
             ACTION_RECONNECT_SHIZUKU -> lifecycleScope.launch { shizukuManager.forceRefresh() }
-            ACTION_RESTART_SHIZUKU -> lifecycleScope.launch { stateMutex.withLock { handleShizukuAutoRestart() } }
         }
         return START_STICKY
     }
@@ -535,53 +522,9 @@ class BatteryMonitorService : LifecycleService() {
         if (wakeLock?.isHeld == true) wakeLock?.release()
     }
 
-    private suspend fun handleShizukuAutoRestart() {
-        if (!config.enableAutoStartShizuku || shizukuManager.isReady()) {
-            cancelShizukuRetry()
-            return
-        }
-        android.util.Log.i(TAG, "Executing scheduled auto-restart for Shizuku via ADB...")
-        val started = shizukuAutoStarter.startShizukuService(notifyOnSuccess = true)
-        shizukuManager.updateStatus()
-        if (!started && config.enableAutoStartShizuku && !shizukuManager.isReady()) {
-            scheduleShizukuRetry(config.shizukuRetryMinutes)
-        } else if (started) {
-            cancelShizukuRetry()
-        }
-    }
-
-    private fun scheduleShizukuRetry(delayMinutes: Int) {
-        if (!config.enableAutoStartShizuku) return
-        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val pendingIntent = shizukuRetryPendingIntent(PendingIntent.FLAG_UPDATE_CURRENT) ?: return
-        alarmManager.setAndAllowWhileIdle(
-            AlarmManager.ELAPSED_REALTIME_WAKEUP,
-            SystemClock.elapsedRealtime() + delayMinutes * 60_000L,
-            pendingIntent
-        )
-        android.util.Log.d(TAG, "Scheduled Shizuku retry in $delayMinutes minutes")
-    }
-
-    private fun cancelShizukuRetry() {
-        val pendingIntent = shizukuRetryPendingIntent(PendingIntent.FLAG_NO_CREATE) ?: return
-        (getSystemService(Context.ALARM_SERVICE) as AlarmManager).cancel(pendingIntent)
-        pendingIntent.cancel()
-    }
-
-    private fun shizukuRetryPendingIntent(extraFlag: Int): PendingIntent? {
-        val intent = Intent(this, BatteryMonitorService::class.java).setAction(ACTION_RESTART_SHIZUKU)
-        return PendingIntent.getForegroundService(
-            this,
-            SHIZUKU_RETRY_REQUEST_CODE,
-            intent,
-            PendingIntent.FLAG_IMMUTABLE or extraFlag
-        )
-    }
-
     override fun onDestroy() {
         screenReceiver?.let { runCatching { unregisterReceiver(it) } }
         releaseWakeLock()
-        cancelShizukuRetry()
         super.onDestroy()
     }
 
@@ -594,11 +537,9 @@ class BatteryMonitorService : LifecycleService() {
         const val ACTION_COOL_DOWN = "com.pin.batteryguard.ACTION_COOL_DOWN"
         const val ACTION_PERIODIC_SCAN = "com.pin.batteryguard.ACTION_PERIODIC_SCAN"
         const val ACTION_RECONNECT_SHIZUKU = "com.pin.batteryguard.ACTION_RECONNECT_SHIZUKU"
-        const val ACTION_RESTART_SHIZUKU = "com.pin.batteryguard.ACTION_RESTART_SHIZUKU"
         private const val TAG = "BatteryMonitorService"
         private const val POLICY_TAG = "BatteryDrainPolicy"
         private const val SCAN_REQUEST_CODE = 10
-        private const val SHIZUKU_RETRY_REQUEST_CODE = 20
         private const val CONFIRMATION_MINUTES = 10
         private const val ACTION_COOLDOWN_MINUTES = 30
         private const val ACTION_COOLDOWN_MILLIS = 30 * 60 * 1000L

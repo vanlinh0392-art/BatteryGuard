@@ -77,7 +77,6 @@ fun SettingsScreen(
 
     var showClearDialog by remember { mutableStateOf(false) }
     var periodMenuExpanded by remember { mutableStateOf(false) }
-    var shizukuRetryMenuExpanded by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -261,98 +260,6 @@ fun SettingsScreen(
                     Column {
                         Text("Freeze app tái phạm", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                         Text("Chỉ freeze sau 2 lần force-stop đã xác minh trong 3 giờ", fontSize = 11.sp, color = Color.Gray)
-                    }
-                }
-            }
-
-            // Section 3: Shizuku
-            Spacer(modifier = Modifier.height(12.dp))
-            Text("DỊCH VỤ HỖ TRỢ (SHIZUKU)", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
-            
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val statusColor = if (uiState.shizukuStatus == ShizukuStatus.READY) BatteryFull else BatteryLow
-                    val statusText = when (uiState.shizukuStatus) {
-                        ShizukuStatus.READY -> "Đã kết nối và sẵn sàng ✓"
-                        ShizukuStatus.RUNNING_NO_PERMISSION -> "Chờ cấp quyền..."
-                        ShizukuStatus.INSTALLED_NOT_RUNNING -> "Chưa chạy"
-                        ShizukuStatus.NOT_INSTALLED -> "Chưa cài đặt"
-                        else -> "Không xác định"
-                    }
-                    
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Trạng thái kết nối", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        Text(statusText, color = statusColor, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    }
-                    
-                    IconButton(onClick = { viewModel.refreshShizuku() }) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "Tải lại")
-                    }
-                }
-            }
-
-            // Toggle Tự khởi chạy Shizuku
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Tự khởi chạy Shizuku", fontWeight = FontWeight.SemiBold)
-                    Text(
-                        "Tự gửi lệnh qua ADB WiFi (cổng 5555) khi mất dịch vụ",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                }
-                Switch(
-                    checked = uiState.config.enableAutoStartShizuku,
-                    onCheckedChange = { viewModel.updateConfig(uiState.config.copy(enableAutoStartShizuku = it)) }
-                )
-            }
-
-            // Dropdown: Thời gian thử lại sau khi mất dịch vụ (10-60 phút)
-            if (uiState.config.enableAutoStartShizuku) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Thời gian thử lại", fontWeight = FontWeight.SemiBold)
-                        Text("Thử bật lại sau khi mất kết nối", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                    }
-                    
-                    ExposedDropdownMenuBox(
-                        expanded = shizukuRetryMenuExpanded,
-                        onExpandedChange = { shizukuRetryMenuExpanded = it }
-                    ) {
-                        OutlinedTextField(
-                            value = "${uiState.config.shizukuRetryMinutes} phút",
-                            onValueChange = {},
-                            readOnly = true,
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = shizukuRetryMenuExpanded) },
-                            modifier = Modifier.width(130.dp).menuAnchor(),
-                            textStyle = MaterialTheme.typography.bodyMedium
-                        )
-                        ExposedDropdownMenu(
-                            expanded = shizukuRetryMenuExpanded,
-                            onDismissRequest = { shizukuRetryMenuExpanded = false }
-                        ) {
-                            listOf(10, 15, 20, 30, 45, 60).forEach { mins ->
-                                DropdownMenuItem(
-                                    text = { Text("$mins phút") },
-                                    onClick = {
-                                        viewModel.updateConfig(uiState.config.copy(shizukuRetryMinutes = mins))
-                                        shizukuRetryMenuExpanded = false
-                                    }
-                                )
-                            }
-                        }
                     }
                 }
             }
