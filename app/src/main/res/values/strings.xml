@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BatteryGuard</string>
+
+    <!-- Navigation -->
+    <string name="nav_dashboard">Tổng quan</string>
+    <string name="nav_apps">Ứng dụng</string>
+    <string name="nav_exceptions">Ngoại lệ</string>
+    <string name="nav_history">Lịch sử</string>
+    <string name="nav_settings">Cài đặt</string>
+
+    <!-- Dashboard -->
+    <string name="dashboard_title">BatteryGuard</string>
+    <string name="battery_level">%1$d%%</string>
+    <string name="charging_status">Đang sạc</string>
+    <string name="not_charging">Không sạc</string>
+    <string name="temperature">Nhiệt độ</string>
+    <string name="voltage">Điện áp</string>
+    <string name="current">Dòng điện</string>
+    <string name="monitoring_on">Đang giám sát</string>
+    <string name="monitoring_off">Tạm dừng</string>
+    <string name="stopped_today">Đã dừng hôm nay</string>
+    <string name="saved_battery">Pin tiết kiệm</string>
+    <string name="top_draining">Ứng dụng ngốn pin</string>
+    <string name="battery_history_24h">Lịch sử pin 24h</string>
+    <string name="screen_off">Màn hình tắt</string>
+    <string name="screen_on">Màn hình bật</string>
+
+    <!-- App List -->
+    <string name="app_list_title">Ứng dụng tiêu thụ pin</string>
+    <string name="drain_percent">%1$.1f%%</string>
+    <string name="foreground_time">Hoạt động: %1$s</string>
+    <string name="background_time">Chạy nền: %1$s</string>
+    <string name="force_stop">Dừng ngay</string>
+    <string name="freeze">Đóng băng</string>
+    <string name="unfreeze">Bỏ đóng băng</string>
+    <string name="add_to_exceptions">Thêm ngoại lệ</string>
+    <string name="filter_all">Tất cả</string>
+    <string name="filter_running">Đang chạy</string>
+    <string name="filter_stopped">Đã dừng</string>
+    <string name="filter_system">Hệ thống</string>
+    <string name="search_apps">Tìm ứng dụng...</string>
+    <string name="no_data">Chưa có dữ liệu. Hãy chờ chu kỳ quét tiếp theo.</string>
+
+    <!-- Exception List -->
+    <string name="exception_title">Danh sách ngoại lệ</string>
+    <string name="exception_subtitle">Các ứng dụng sẽ không bị dừng tự động</string>
+    <string name="add_exception">Thêm ứng dụng</string>
+    <string name="remove_exception">Xóa khỏi ngoại lệ</string>
+    <string name="default_exception">Mặc định (không thể xóa)</string>
+    <string name="added_on">Thêm ngày: %1$s</string>
+    <string name="exception_reason_phone">Ứng dụng gọi điện - cần thiết</string>
+    <string name="exception_reason_messages">Ứng dụng nhắn tin - cần thiết</string>
+    <string name="exception_reason_clock">Đồng hồ/Báo thức - cần thiết</string>
+    <string name="exception_reason_shizuku">Shizuku - cần để app hoạt động</string>
+    <string name="exception_reason_self">BatteryGuard - ứng dụng này</string>
+
+    <!-- History -->
+    <string name="history_title">Lịch sử hoạt động</string>
+    <string name="history_empty">Chưa có hoạt động nào</string>
+    <string name="history_force_stop">Đã dừng</string>
+    <string name="history_freeze">Đã đóng băng</string>
+    <string name="history_drain">Tiêu thụ %1$.1f%% pin</string>
+    <string name="history_threshold">Vượt ngưỡng %1$.0f%%</string>
+    <string name="history_success">Thành công</string>
+    <string name="history_failed">Thất bại</string>
+    <string name="today">Hôm nay</string>
+    <string name="yesterday">Hôm qua</string>
+    <string name="total_stopped">Tổng đã dừng: %1$d</string>
+    <string name="total_saved">Tiết kiệm: ~%1$.1f%%</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Cài đặt</string>
+    <string name="settings_monitoring">Giám sát</string>
+    <string name="settings_monitoring_enabled">Bật giám sát</string>
+    <string name="settings_monitoring_desc">Tự động giám sát khi màn hình tắt</string>
+    <string name="settings_threshold">Ngưỡng tiêu thụ pin</string>
+    <string name="settings_threshold_desc">Dừng app khi tiêu thụ vượt mức này (%1$.0f%%)</string>
+    <string name="settings_period">Chu kỳ quét</string>
+    <string name="settings_period_desc">Quét mỗi %1$d phút</string>
+    <string name="settings_auto_stop">Tự động dừng ứng dụng</string>
+    <string name="settings_auto_stop_desc">Tự động force stop khi vượt ngưỡng</string>
+    <string name="settings_notify">Thông báo khi dừng</string>
+    <string name="settings_notify_desc">Hiển thị thông báo tổng hợp</string>
+    <string name="settings_action_mode">Chế độ xử lý</string>
+    <string name="settings_force_stop_mode">Force Stop</string>
+    <string name="settings_freeze_mode">Đóng băng (Freeze)</string>
+    <string name="settings_force_stop_explain">Dừng app, app có thể tự khởi động lại</string>
+    <string name="settings_freeze_explain">Vô hiệu hóa hoàn toàn, cần bật lại thủ công</string>
+    <string name="settings_data">Dữ liệu</string>
+    <string name="settings_retention">Lưu trữ dữ liệu</string>
+    <string name="settings_retention_desc">Giữ dữ liệu trong %1$d ngày</string>
+    <string name="settings_clear_data">Xóa toàn bộ dữ liệu</string>
+    <string name="settings_shizuku">Shizuku</string>
+    <string name="settings_shizuku_status">Trạng thái Shizuku</string>
+    <string name="settings_shizuku_ready">Sẵn sàng</string>
+    <string name="settings_shizuku_not_running">Chưa chạy</string>
+    <string name="settings_shizuku_not_installed">Chưa cài đặt</string>
+    <string name="settings_shizuku_no_permission">Chưa cấp quyền</string>
+    <string name="settings_xiaomi">Xiaomi / HyperOS</string>
+    <string name="settings_xiaomi_autostart">Tự khởi động</string>
+    <string name="settings_xiaomi_battery">Tiết kiệm pin</string>
+    <string name="settings_xiaomi_open">Mở cài đặt</string>
+    <string name="settings_about">Thông tin</string>
+    <string name="settings_version">Phiên bản %1$s</string>
+
+    <!-- Setup Wizard -->
+    <string name="setup_welcome_title">Chào mừng đến BatteryGuard</string>
+    <string name="setup_welcome_desc">Ứng dụng giúp bạn quản lý pin thông minh.\nTự động dừng các app ngốn pin khi màn hình tắt.</string>
+    <string name="setup_shizuku_title">Cài đặt Shizuku</string>
+    <string name="setup_shizuku_desc">Shizuku cần thiết để dừng ứng dụng mà không cần root.\n\n1. Tải Shizuku từ GitHub\n2. Bật \"Gỡ lỗi không dây\" trong Tùy chọn nhà phát triển\n3. Mở Shizuku và nhấn \"Ghép nối\"</string>
+    <string name="setup_permissions_title">Cấp quyền</string>
+    <string name="setup_permissions_desc">BatteryGuard cần một số quyền để hoạt động:</string>
+    <string name="setup_perm_usage">Quyền truy cập dữ liệu sử dụng</string>
+    <string name="setup_perm_notification">Quyền thông báo</string>
+    <string name="setup_perm_battery">Bỏ qua tối ưu pin</string>
+    <string name="setup_xiaomi_title">Cài đặt Xiaomi</string>
+    <string name="setup_xiaomi_desc">Xiaomi giới hạn app chạy nền rất mạnh.\nHãy bật các tùy chọn sau để BatteryGuard hoạt động ổn định:</string>
+    <string name="setup_xiaomi_autostart">Bật tự khởi động</string>
+    <string name="setup_xiaomi_battery">Đặt \"Không hạn chế\" trong tiết kiệm pin</string>
+    <string name="setup_xiaomi_lock">Khóa app trong danh sách gần đây</string>
+    <string name="setup_complete">Hoàn tất</string>
+    <string name="setup_skip">Bỏ qua</string>
+    <string name="setup_next">Tiếp tục</string>
+    <string name="setup_back">Quay lại</string>
+    <string name="setup_done">Bắt đầu sử dụng</string>
+    <string name="setup_install_shizuku">Tải Shizuku</string>
+    <string name="setup_grant">Cấp quyền</string>
+    <string name="setup_granted">Đã cấp ✓</string>
+    <string name="setup_open_settings">Mở cài đặt</string>
+
+    <!-- Notifications -->
+    <string name="notif_channel_monitoring">Giám sát pin</string>
+    <string name="notif_channel_monitoring_desc">Thông báo giám sát pin liên tục</string>
+    <string name="notif_channel_alerts">Cảnh báo pin</string>
+    <string name="notif_channel_alerts_desc">Cảnh báo khi dừng ứng dụng ngốn pin</string>
+    <string name="notif_channel_summary">Tổng hợp</string>
+    <string name="notif_channel_summary_desc">Báo cáo tổng hợp hàng ngày</string>
+    <string name="notif_monitoring_title">🔋 %1$d%% | %2$s</string>
+    <string name="notif_monitoring_text">Đã dừng %1$d ứng dụng hôm nay</string>
+    <string name="notif_stopped_title">BatteryGuard đã dừng %1$d ứng dụng</string>
+    <string name="notif_stopped_text">Tiết kiệm ~%1$.1f%% pin. Nhấn để xem chi tiết.</string>
+    <string name="notif_shizuku_title">Shizuku chưa chạy</string>
+    <string name="notif_shizuku_text">Nhấn để khởi động Shizuku</string>
+
+    <!-- Common -->
+    <string name="ok">OK</string>
+    <string name="cancel">Hủy</string>
+    <string name="confirm">Xác nhận</string>
+    <string name="delete">Xóa</string>
+    <string name="hours_short">%1$dh</string>
+    <string name="minutes_short">%1$dp</string>
+    <string name="hours_minutes">%1$dh %2$dp</string>
+    <string name="percent">%1$.1f%%</string>
+    <string name="unknown_app">Không xác định</string>
+
+    <!-- App Shield / Banking Protection -->
+    <string name="app_shield_title">Bảo vệ Ứng dụng &amp; Ngân hàng</string>
+    <string name="app_shield_subtitle">Tự động ẩn Developer Options &amp; ADB khi mở app ngân hàng</string>
+    <string name="app_shield_accessibility_desc">Dịch vụ nhận diện mở app ngân hàng để ẩn Developer Options và ADB, bảo vệ thiết bị không bị chặn.</string>
+</resources>
