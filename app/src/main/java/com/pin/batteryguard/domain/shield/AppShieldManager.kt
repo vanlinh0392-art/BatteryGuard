@@ -26,6 +26,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -125,49 +126,34 @@ class AppShieldManager @Inject constructor(
         if (_autoDetectedBankPackages.contains(packageName)) return true
 
         val lowerPkg = packageName.lowercase()
-        val bankPatterns = listOf(
-            // Ngân hàng TMCP Việt Nam
-            "vcb", "vietcombank", "digibank",
-            "techcombank", "vn.com.techcombank", "com.vibe.techcombank",
-            "mbmobile", "mbbank",
-            "bidv", "com.babor.bidv", "com.vnpay.bidv",
-            "vietinbank", "ipay",
-            "agribank", "com.vnpay.agribank",
-            "vpbank", "com.vnpay.vpbankonline", "cake.bank",
-            "tpb", "tpbank",
-            "acb", "mobile.acb.com.vn",
-            "sacombank", "com.vnpay.sacombank",
-            "shb", "shbmobile",
-            "msb", "msbmobile",
-            "hdbank", "com.vnpay.hdbank",
-            "ocb", "ocbomni",
-            "scb", "scbmobile",
-            "vib", "myvib",
-            "kienlong", "kienlongbank",
-            "seabank", "seamobile",
-            "bacabank",
-            "pvcombank",
-            "baovietbank",
-            "dongabank",
-            "lienviet", "lpbank",
-            "namabank",
-            "shinhan", "shinhanglobal",
-            "wooribank",
-            "hsbc", "standardchartered", "citi", "uob", "publicbank", "kbank",
-            "timo", "vn.timo",
-            // Ví điện tử & Fintech
-            "momo", "vn.com.momo",
-            "zalopay", "com.zing.zalo.pay",
-            "vtpay", "viettelmoney", "viettelpay", "com.bplus.vtpay",
-            "vnptmoney", "shopeepay", "airpay", "vnpay", "payoo",
-            "finhay", "tikop", "topi", "infina",
-            // Chứng khoán
-            "ssi", "vndirect", "vps", "tcbs", "entrade",
-            // Mẫu nhận diện phổ biến
-            ".bank", ".banking", ".mbank", ".ebanking", "smartbanking"
-        )
+        val segments = lowerPkg.split(".")
 
-        if (bankPatterns.any { lowerPkg.contains(it) }) {
+        // BUG #4 fix: Pattern ngắn (≤4 ký tự) match segment chính xác để tránh false positive
+        val segmentExactPatterns = setOf(
+            "vcb", "acb", "scb", "vib", "msb", "shb", "ocb", "tpb",
+            "bidv", "ipay", "momo", "timo", "ssi", "vps", "tcbs", "uob",
+            "bank", "banking", "mbank", "ebanking"
+        )
+        if (segments.any { it in segmentExactPatterns }) {
+            _autoDetectedBankPackages.add(packageName)
+            return true
+        }
+
+        // Pattern dài (≥5 ký tự): đủ specific, dùng contains an toàn
+        val containsPatterns = listOf(
+            "vietcombank", "digibank", "techcombank", "mbmobile", "mbbank",
+            "vietinbank", "agribank", "vpbank", "tpbank", "sacombank",
+            "shbmobile", "msbmobile", "hdbank", "ocbomni", "scbmobile",
+            "myvib", "kienlongbank", "kienlong", "seabank", "seamobile",
+            "bacabank", "pvcombank", "baovietbank", "dongabank",
+            "lienviet", "lpbank", "namabank", "shinhan", "shinhanglobal",
+            "wooribank", "hsbc", "standardchartered", "publicbank", "kbank",
+            "zalopay", "vtpay", "viettelmoney", "viettelpay", "vnptmoney",
+            "shopeepay", "airpay", "vnpay", "payoo",
+            "finhay", "tikop", "topi", "infina",
+            "vndirect", "entrade", "smartbanking"
+        )
+        if (containsPatterns.any { lowerPkg.contains(it) }) {
             _autoDetectedBankPackages.add(packageName)
             return true
         }
@@ -175,20 +161,16 @@ class AppShieldManager @Inject constructor(
         try {
             val pm = context.packageManager
             val appInfo = pm.getApplicationInfo(packageName, 0)
-
-            // Kiểm tra Application Label (Tên hiển thị của ứng dụng)
             val label = pm.getApplicationLabel(appInfo).toString().lowercase()
             val labelKeywords = listOf(
-                "ngân hàng", "bank", "ví điện tử", "chứng khoán", "smartbanking",
-                "digibank", "ipay", "tài chính", "tiết kiệm", "thanh toán", "finance"
+                "ngân hàng", "bank", "ví điện tử", "chứng khoán",
+                "smartbanking", "digibank", "ipay", "finance"
             )
             if (labelKeywords.any { label.contains(it) }) {
                 _autoDetectedBankPackages.add(packageName)
                 return true
             }
-        } catch (_: Exception) {
-            // Không tìm thấy package
-        }
+        } catch (_: Exception) { }
 
         return false
     }
@@ -227,16 +209,18 @@ class AppShieldManager @Inject constructor(
         val config = settingsDataStore.shieldConfigFlow.first()
         if (!config.isEnabled) return@withContext false
 
-        // Kiểm tra debounce cooldown (10 giây)
-        val now = SystemClock.elapsedRealtime()
-        val lastTrigger = recentTriggerTimestamps[packageName] ?: 0L
-        if (now - lastTrigger < 10_000L) {
-            Log.d(TAG, "Bỏ qua trigger trùng lặp cho $packageName (cooldown)")
-            return@withContext true
-        }
-        recentTriggerTimestamps[packageName] = now
-
         mutex.withLock {
+            // Cooldown check trong mutex để tránh race condition (BUG #3 fix)
+            val now = SystemClock.elapsedRealtime()
+            val lastTrigger = recentTriggerTimestamps[packageName] ?: 0L
+            if (now - lastTrigger < 10_000L) {
+                Log.d(TAG, "Bỏ qua trigger trùng lặp cho $packageName (cooldown)")
+                return@withLock true
+            }
+            recentTriggerTimestamps[packageName] = now
+            // Dọn entries cũ > 1 phút (BUG #7 fix)
+            recentTriggerTimestamps.entries.removeIf { now - it.value > 60_000L }
+
             val existingSnapshot = snapshotDao.getSnapshot()
             if (existingSnapshot?.isCurrentlyHidden == true) {
                 Log.i(TAG, "Cài đặt đã đang ở trạng thái ẩn. Gia hạn bộ đếm hẹn giờ.")
@@ -371,6 +355,7 @@ class AppShieldManager @Inject constructor(
             NotificationHelper.cancelAppShieldOngoingNotification(context)
 
             // 2. Khôi phục Settings Global & Secure
+            var restoreSuccess = false
             try {
                 Settings.Global.putInt(cr, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, snapshot.originalDevOptionsEnabled)
                 Settings.Global.putInt(cr, Settings.Global.ADB_ENABLED, snapshot.originalAdbEnabled)
@@ -392,11 +377,18 @@ class AppShieldManager @Inject constructor(
                 Settings.Secure.putInt(cr, Settings.Secure.ACCESSIBILITY_ENABLED, if (restoredServicesString.isNotBlank()) 1 else 0)
                 Log.i(TAG, "✅ Đã khôi phục chính xác ${originalServices.size} dịch vụ trợ năng active trước đó: $restoredServicesString")
                 Log.i(TAG, "✅ Đã khôi phục cài đặt Developer Options & ADB về giá trị gốc.")
+                restoreSuccess = true
+            } catch (e: SecurityException) {
+                Log.e(TAG, "Mất quyền WRITE_SECURE_SETTINGS, giữ snapshot để thử lại sau.", e)
             } catch (e: Exception) {
                 Log.e(TAG, "Lỗi khi khôi phục Secure Settings: ${e.message}", e)
             }
 
-            // Cập nhật trạng thái Room DB
+            // BUG #5 fix: Chỉ đánh dấu đã khôi phục khi ghi settings thực sự thành công
+            if (!restoreSuccess) {
+                Log.w(TAG, "Không đánh dấu khôi phục vì ghi settings thất bại. Sẽ thử lại lần sau.")
+                return@withLock false
+            }
             snapshotDao.setHidden(false)
 
             // 3. TỰ ĐỘNG BẬT LẠI SHIZUKU (Key Synergy!)
@@ -404,6 +396,8 @@ class AppShieldManager @Inject constructor(
             if (config.autoRestartShizuku && snapshot.wasShizukuRunning) {
                 Log.i(TAG, "Tự động kích hoạt lại Shizuku qua ShizukuAutoStarter...")
                 try {
+                    // BUG #2 fix: Chờ ADB daemon bind port sau khi bật lại
+                    delay(2000)
                     revivedShizuku = shizukuAutoStarter.startShizukuService(notifyOnSuccess = false)
                     Log.i(TAG, "Kết quả hồi sinh Shizuku: $revivedShizuku")
                 } catch (e: Exception) {
