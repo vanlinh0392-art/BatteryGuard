@@ -112,7 +112,7 @@ class AppShieldManager @Inject constructor(
         }
 
         // Lớp 2: Cơ chế tự động phát hiện ngân hàng/ví điện tử
-        if (isAutoDetectEnabled && isBankingOrFinancePackage(packageName)) {
+        if (isAutoDetectEnabled && isSensitiveSecurityPackage(packageName)) {
             return true
         }
 
@@ -122,25 +122,29 @@ class AppShieldManager @Inject constructor(
     /**
      * Nhận diện thông minh ứng dụng ngân hàng, ví điện tử hoặc dịch vụ tài chính.
      */
-    fun isBankingOrFinancePackage(packageName: String): Boolean {
+    fun isSensitiveSecurityPackage(packageName: String): Boolean {
         if (_autoDetectedBankPackages.contains(packageName)) return true
 
         val lowerPkg = packageName.lowercase()
         val segments = lowerPkg.split(".")
 
-        // BUG #4 fix: Pattern ngắn (≤4 ký tự) match segment chính xác để tránh false positive
+        // Pattern ngắn match segment chính xác
         val segmentExactPatterns = setOf(
+            // Ngân hàng
             "vcb", "acb", "scb", "vib", "msb", "shb", "ocb", "tpb",
             "bidv", "ipay", "momo", "timo", "ssi", "vps", "tcbs", "uob",
-            "bank", "banking", "mbank", "ebanking"
+            "bank", "banking", "mbank", "ebanking",
+            // Chính phủ / Định danh
+            "vnid", "vssid", "etax", "bhxh"
         )
         if (segments.any { it in segmentExactPatterns }) {
             _autoDetectedBankPackages.add(packageName)
             return true
         }
 
-        // Pattern dài (≥5 ký tự): đủ specific, dùng contains an toàn
+        // Pattern dài: đủ specific, dùng contains an toàn
         val containsPatterns = listOf(
+            // Ngân hàng
             "vietcombank", "digibank", "techcombank", "mbmobile", "mbbank",
             "vietinbank", "agribank", "vpbank", "tpbank", "sacombank",
             "shbmobile", "msbmobile", "hdbank", "ocbomni", "scbmobile",
@@ -148,10 +152,14 @@ class AppShieldManager @Inject constructor(
             "bacabank", "pvcombank", "baovietbank", "dongabank",
             "lienviet", "lpbank", "namabank", "shinhan", "shinhanglobal",
             "wooribank", "hsbc", "standardchartered", "publicbank", "kbank",
+            // Ví điện tử
             "zalopay", "vtpay", "viettelmoney", "viettelpay", "vnptmoney",
             "shopeepay", "airpay", "vnpay", "payoo",
             "finhay", "tikop", "topi", "infina",
-            "vndirect", "entrade", "smartbanking"
+            // Chứng khoán
+            "vndirect", "entrade", "smartbanking",
+            // Chính phủ / Dịch vụ công
+            "dancuquocgia", "dichvucong", "baohiemxahoi", "vneid"
         )
         if (containsPatterns.any { lowerPkg.contains(it) }) {
             _autoDetectedBankPackages.add(packageName)
@@ -164,7 +172,8 @@ class AppShieldManager @Inject constructor(
             val label = pm.getApplicationLabel(appInfo).toString().lowercase()
             val labelKeywords = listOf(
                 "ngân hàng", "bank", "ví điện tử", "chứng khoán",
-                "smartbanking", "digibank", "ipay", "finance"
+                "smartbanking", "digibank", "ipay", "finance",
+                "định danh", "dịch vụ công", "bảo hiểm xã hội", "vneid", "vssid"
             )
             if (labelKeywords.any { label.contains(it) }) {
                 _autoDetectedBankPackages.add(packageName)
@@ -182,7 +191,7 @@ class AppShieldManager @Inject constructor(
             val installed = pm.getInstalledApplications(PackageManager.GET_META_DATA)
             for (app in installed) {
                 if (app.packageName == context.packageName) continue
-                if (isBankingOrFinancePackage(app.packageName)) {
+                if (isSensitiveSecurityPackage(app.packageName)) {
                     _autoDetectedBankPackages.add(app.packageName)
                 }
             }

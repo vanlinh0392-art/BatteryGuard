@@ -97,7 +97,7 @@ class AppShieldViewModel @Inject constructor(
                 val shieldedMap = dbShielded.associateBy { it.packageName }
 
                 val merged = allUserApps.map { (pkg, name) ->
-                    val isBank = appShieldManager.isBankingOrFinancePackage(pkg)
+                    val isBank = appShieldManager.isSensitiveSecurityPackage(pkg)
                     val isManuallySelected = shieldedMap[pkg]?.isEnabled == true
                     val isAutoProtected = config.autoDetectBanks && isBank
 
