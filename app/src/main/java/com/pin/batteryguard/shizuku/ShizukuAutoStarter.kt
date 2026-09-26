@@ -13,6 +13,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
 import java.io.File
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,14 +26,8 @@ class ShizukuAutoStarter @Inject constructor(
 ) {
     private val startMutex = Mutex()
     @Volatile private var lastStartAttemptTime = 0L
-    private val AUTO_START_COOLDOWN_MS = 10 * 60 * 1000L // 10 phút giữa các lần auto-start chạy ngầm
+    private val AUTO_START_COOLDOWN_MS = 10 * 60 * 1000L
 
-    /**
-     * Tự động khởi động dịch vụ Shizuku qua ADB localhost:5555 (hoặc fallback Wireless Debug port).
-     * @param notifyOnSuccess Nếu true, bắn thông báo khi khởi chạy thành công.
-     * @param isManual Nếu true (người dùng bấm trực tiếp), bỏ qua cooldown và thử lại ngay.
-     * @return true nếu Shizuku đã sẵn sàng sau khi khởi chạy.
-     */
     suspend fun startShizukuService(
         notifyOnSuccess: Boolean = true,
         isManual: Boolean = false
@@ -68,52 +63,40 @@ class ShizukuAutoStarter @Inject constructor(
         try {
             lastStartAttemptTime = System.currentTimeMillis()
 
-            // 0. Chuẩn bị môi trường ADB: bật development_settings_enabled, adb_enabled, adb_wifi_enabled
+            // 0. Chuẩn bị môi trường ADB
             prepareAdbEnvironment()
 
-            // daemon adbd cần thời gian khởi tạo socket sau khi bật ADB
-            delay(1500L)
+            // === CÁCH 1: Chạy trực tiếp qua ProcessBuilder (giống Tasker) ===
+            // Không cần ADB TCP → không hỏi "cho phép kết nối" RSA key
+            val directStarted = tryStartDirect()
+            if (directStarted && waitForBinder(notifyOnSuccess)) {
+                return@withContext true
+            }
 
+            // === CÁCH 2: Fallback qua ADB TCP (cần auth RSA) ===
+            delay(1500L) // ADB daemon cần thời gian khởi tạo socket
             val starterCmd = buildShizukuStarterCommand()
-            Log.d(TAG, "Starting Shizuku with robust command: $starterCmd")
+            Log.d(TAG, "Fallback: Starting Shizuku via ADB TCP: $starterCmd")
 
-            // 1. Thử cổng 5555 trước, sau đó là Wireless Debugging port (mỗi cổng thử đúng 1 lần duy nhất)
             var executed = false
             val candidatePorts = mutableListOf(5555)
             getWirelessDebugPort()?.let { if (it > 0 && it != 5555) candidatePorts.add(it) }
 
             for (port in candidatePorts) {
-                Log.d(TAG, "Thử gửi lệnh khởi động Shizuku qua port $port...")
+                Log.d(TAG, "Thử gửi lệnh qua port $port...")
                 val (success, output) = adbClient.executeCommand(starterCmd, port = port, timeoutMs = 8000)
                 if (success) {
                     executed = true
-                    Log.i(TAG, "✅ Lệnh khởi động Shizuku đã gửi thành công qua port $port. Output: $output")
+                    Log.i(TAG, "✅ Lệnh gửi thành công qua port $port. Output: $output")
                     break
                 } else {
                     Log.w(TAG, "Không thể gửi lệnh qua port $port: $output")
-                    // Nếu user hủy hộp thoại hoặc timeout cấp quyền RSA, dừng ngay không thử port khác
-                    if (output.contains("timeout or cancelled") || adbClient.isAuthDeclinedRecently()) {
-                        break
-                    }
+                    if (output.contains("timeout or cancelled") || adbClient.isAuthDeclinedRecently()) break
                 }
             }
 
-            // 2. Nếu gửi lệnh thành công, đợi Shizuku khởi động và kiểm tra pingBinder
-            if (executed) {
-                val startTime = System.currentTimeMillis()
-                while (System.currentTimeMillis() - startTime < 10000L) {
-                    delay(500L)
-                    try {
-                        if (Shizuku.pingBinder()) {
-                            Log.i(TAG, "✅ Shizuku service successfully started and binder is alive!")
-                            if (notifyOnSuccess) {
-                                NotificationHelper.showShizukuRestarted(context)
-                            }
-                            return@withContext true
-                        }
-                    } catch (_: Exception) {}
-                }
-                Log.w(TAG, "Command executed but Shizuku binder did not respond within 10s")
+            if (executed && waitForBinder(notifyOnSuccess)) {
+                return@withContext true
             }
 
             return@withContext false
@@ -123,23 +106,79 @@ class ShizukuAutoStarter @Inject constructor(
     }
 
     /**
-     * Tạo chuỗi lệnh shell chuẩn xác để kích hoạt Shizuku.
-     * TUYỆT ĐỐI KHÔNG DÙNG "sh" trước file libshizuku.so vì đây là file nhị phân ELF!
+     * Chạy Shizuku starter trực tiếp bằng ProcessBuilder — giống cách Tasker làm.
+     * Không cần ADB TCP, không hỏi RSA key authorization.
      */
-    private fun buildShizukuStarterCommand(): String {
-        val directLibPath = try {
+    private fun tryStartDirect(): Boolean {
+        val libPath = getShizukuLibPath() ?: return false
+
+        return try {
+            Log.i(TAG, "Thử khởi động trực tiếp: $libPath")
+            val process = ProcessBuilder(libPath)
+                .redirectErrorStream(true)
+                .start()
+
+            val finished = process.waitFor(10, TimeUnit.SECONDS)
+            val output = process.inputStream.bufferedReader().use { it.readText() }.take(500)
+            val exitCode = if (finished) process.exitValue() else -1
+
+            if (!finished) process.destroyForcibly()
+
+            Log.i(TAG, "Direct exec result: exit=$exitCode, output=$output")
+            // exit 0 = thành công, output chứa "shizuku_starter exit with 0"
+            finished && exitCode == 0
+        } catch (e: Exception) {
+            Log.w(TAG, "Direct exec failed: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Chờ Shizuku binder alive sau khi gửi lệnh.
+     */
+    private suspend fun waitForBinder(notifyOnSuccess: Boolean): Boolean {
+        val startTime = System.currentTimeMillis()
+        while (System.currentTimeMillis() - startTime < 10000L) {
+            delay(500L)
+            try {
+                if (Shizuku.pingBinder()) {
+                    Log.i(TAG, "✅ Shizuku binder alive!")
+                    if (notifyOnSuccess) NotificationHelper.showShizukuRestarted(context)
+                    return true
+                }
+            } catch (_: Exception) {}
+        }
+        Log.w(TAG, "Shizuku binder did not respond within 10s")
+        return false
+    }
+
+    /**
+     * Tìm đường dẫn libshizuku.so trên thiết bị.
+     */
+    private fun getShizukuLibPath(): String? {
+        return try {
             val appInfo = context.packageManager.getApplicationInfo("moe.shizuku.privileged.api", 0)
             val directFile = File(appInfo.nativeLibraryDir, "libshizuku.so")
-            if (directFile.exists()) directFile.absolutePath else null
+            if (directFile.exists()) {
+                directFile.absolutePath
+            } else {
+                // Fallback: tìm trong thư mục lib
+                val baseDir = File(appInfo.sourceDir).parentFile
+                baseDir?.walkTopDown()
+                    ?.firstOrNull { it.name == "libshizuku.so" }
+                    ?.absolutePath
+            }
         } catch (_: Exception) {
             null
         }
+    }
 
-        // Chuỗi script shell đa tầng tự động fallback
+    private fun buildShizukuStarterCommand(): String {
+        val directLibPath = getShizukuLibPath()
+
         val dynamicCmd = "PKG=moe.shizuku.privileged.api; " +
                 "LIB=\$(dirname \$(pm path --user 0 \$PKG 2>&1 </dev/null | sed 's|.*:||'))/lib/*/libshizuku.so; " +
                 "([ -f \"\$LIB\" ] && exec \"\$LIB\") || " +
-                "(sh /sdcard/Android/data/\$PKG/starter.sh) || " +
                 "(CP=\$(pm path \$PKG 2>&1 | sed 's|.*:||') && [ -n \"\$CP\" ] && CLASSPATH=\$CP exec app_process /system/bin moe.shizuku.server.Starter)"
 
         return if (directLibPath != null) {
@@ -149,9 +188,6 @@ class ShizukuAutoStarter @Inject constructor(
         }
     }
 
-    /**
-     * Lấy cổng Wireless Debugging hiện tại của hệ thống nếu có.
-     */
     private fun getWirelessDebugPort(): Int? {
         return try {
             val systemPropertiesClass = Class.forName("android.os.SystemProperties")
@@ -176,9 +212,6 @@ class ShizukuAutoStarter @Inject constructor(
         }
     }
 
-    /**
-     * Chuẩn bị môi trường hệ thống: đảm bảo Tùy chọn nhà phát triển, Gỡ lỗi USB và Gỡ lỗi không dây đều BẬT.
-     */
     fun prepareAdbEnvironment() {
         try {
             if (context.checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS") == PackageManager.PERMISSION_GRANTED) {
@@ -186,7 +219,7 @@ class ShizukuAutoStarter @Inject constructor(
                 Settings.Global.putInt(cr, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 1)
                 Settings.Global.putInt(cr, Settings.Global.ADB_ENABLED, 1)
                 Settings.Global.putInt(cr, "adb_wifi_enabled", 1)
-                Log.d(TAG, "✅ Đã chuẩn bị môi trường: development_settings_enabled=1, adb_enabled=1, adb_wifi_enabled=1")
+                Log.d(TAG, "✅ Đã chuẩn bị môi trường ADB")
             }
         } catch (e: Exception) {
             Log.w(TAG, "Không thể ghi Secure Settings: ${e.message}")
