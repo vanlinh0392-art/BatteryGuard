@@ -53,6 +53,16 @@ class AdbClient @Inject constructor(
 
     private var cachedKeyPair: KeyPair? = null
 
+    @Volatile private var lastAuthDeclinedOrTimeoutTime: Long = 0L
+
+    fun isAuthDeclinedRecently(cooldownMs: Long = 10 * 60 * 1000L): Boolean {
+        return (System.currentTimeMillis() - lastAuthDeclinedOrTimeoutTime) < cooldownMs
+    }
+
+    fun resetAuthCooldown() {
+        lastAuthDeclinedOrTimeoutTime = 0L
+    }
+
     /**
      * Thực thi lệnh shell qua ADB socket localhost.
      * @param command Lệnh cần chạy
@@ -91,9 +101,24 @@ class AdbClient @Inject constructor(
 
                 // Nếu thiết bị chưa trust public key này, gửi RSAPUBLICKEY để hiển thị prompt cho user
                 if (msg.command == A_AUTH && msg.arg0 == ADB_AUTH_TOKEN) {
+                    Log.i(TAG, "Thiết bị yêu cầu xác thực RSA Public Key. Đang hiển thị hộp thoại cấp quyền trên màn hình...")
                     val pubKeyData = formatAdbPublicKey(keyPair.public as RSAPublicKey)
+                    // Tăng timeout lên 30 giây để người dùng kịp đọc và bấm 'Cho phép' trên màn hình
+                    socket.soTimeout = 30000
                     AdbMessage(A_AUTH, ADB_AUTH_RSAPUBLICKEY, 0, pubKeyData).write(output)
-                    msg = AdbMessage.read(input)
+                    try {
+                        msg = AdbMessage.read(input)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Người dùng không xác nhận hộp thoại ADB kịp thời hoặc đã hủy: ${e.message}")
+                        lastAuthDeclinedOrTimeoutTime = System.currentTimeMillis()
+                        return@withContext Pair(false, "ADB authorization timeout or cancelled")
+                    } finally {
+                        socket.soTimeout = timeoutMs
+                    }
+
+                    if (msg.command != A_CNXN) {
+                        lastAuthDeclinedOrTimeoutTime = System.currentTimeMillis()
+                    }
                 }
             }
 
@@ -101,6 +126,9 @@ class AdbClient @Inject constructor(
                 Log.w(TAG, "ADB handshake failed: unexpected response command 0x${Integer.toHexString(msg.command)}")
                 return@withContext Pair(false, "ADB handshake failed (0x${Integer.toHexString(msg.command)})")
             }
+
+            // Kết nối và xác thực thành công -> xóa cờ cooldown
+            lastAuthDeclinedOrTimeoutTime = 0L
 
             // 3. Mở shell stream
             val localId = 1

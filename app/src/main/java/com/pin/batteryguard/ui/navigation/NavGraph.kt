@@ -173,9 +173,6 @@ fun BatteryGuardNavHost() {
                     },
                     onNavigateToPermissionGranter = {
                         navController.navigate(Screen.PermissionGranter.route)
-                    },
-                    onNavigateToAppShield = {
-                        navController.navigate(Screen.AppShield.route)
                     }
                 )
             }

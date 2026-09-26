@@ -9,6 +9,7 @@ import com.pin.batteryguard.util.NotificationHelper
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
 import java.io.File
@@ -22,12 +23,20 @@ class ShizukuAutoStarter @Inject constructor(
     @ApplicationContext private val context: Context,
     private val adbClient: AdbClient
 ) {
+    private val startMutex = Mutex()
+    @Volatile private var lastStartAttemptTime = 0L
+    private val AUTO_START_COOLDOWN_MS = 10 * 60 * 1000L // 10 phút giữa các lần auto-start chạy ngầm
+
     /**
      * Tự động khởi động dịch vụ Shizuku qua ADB localhost:5555 (hoặc fallback Wireless Debug port).
      * @param notifyOnSuccess Nếu true, bắn thông báo khi khởi chạy thành công.
+     * @param isManual Nếu true (người dùng bấm trực tiếp), bỏ qua cooldown và thử lại ngay.
      * @return true nếu Shizuku đã sẵn sàng sau khi khởi chạy.
      */
-    suspend fun startShizukuService(notifyOnSuccess: Boolean = true): Boolean = withContext(Dispatchers.IO) {
+    suspend fun startShizukuService(
+        notifyOnSuccess: Boolean = true,
+        isManual: Boolean = false
+    ): Boolean = withContext(Dispatchers.IO) {
         // Nếu Shizuku đã đang chạy, không cần làm gì
         try {
             if (Shizuku.pingBinder()) {
@@ -36,61 +45,81 @@ class ShizukuAutoStarter @Inject constructor(
             }
         } catch (_: Exception) {}
 
-        // 0. Chuẩn bị môi trường ADB: bật development_settings_enabled, adb_enabled, adb_wifi_enabled
-        prepareAdbEnvironment()
+        // Kiểm tra cooldown nếu chạy tự động
+        val now = System.currentTimeMillis()
+        if (!isManual) {
+            if (now - lastStartAttemptTime < AUTO_START_COOLDOWN_MS) {
+                Log.d(TAG, "Bỏ qua auto-start Shizuku do đang trong thời gian chờ cooldown.")
+                return@withContext false
+            }
+            if (adbClient.isAuthDeclinedRecently()) {
+                Log.d(TAG, "Bỏ qua auto-start Shizuku do người dùng chưa xác nhận ADB gần đây.")
+                return@withContext false
+            }
+        } else {
+            adbClient.resetAuthCooldown()
+        }
 
-        // ⚠️ ĐỘ TRỄ KHỞI ĐỘNG adbd: daemon adbd cần 1.5s - 2s để restart socket sau khi bật ADB_ENABLED
-        delay(2000L)
+        if (!startMutex.tryLock()) {
+            Log.d(TAG, "Quá trình kích hoạt Shizuku đang diễn ra, bỏ qua yêu cầu trùng lặp.")
+            return@withContext false
+        }
 
-        val starterCmd = buildShizukuStarterCommand()
-        Log.d(TAG, "Starting Shizuku with robust command: $starterCmd")
+        try {
+            lastStartAttemptTime = System.currentTimeMillis()
 
-        // 1. Thử kết nối với cơ chế Retry Loop (4 lần thử, kết hợp cả cổng 5555 và Wireless port)
-        var executed = false
-        val candidatePorts = mutableListOf(5555)
-        getWirelessDebugPort()?.let { if (it > 0 && it != 5555) candidatePorts.add(it) }
+            // 0. Chuẩn bị môi trường ADB: bật development_settings_enabled, adb_enabled, adb_wifi_enabled
+            prepareAdbEnvironment()
 
-        for (attempt in 1..4) {
+            // daemon adbd cần thời gian khởi tạo socket sau khi bật ADB
+            delay(1500L)
+
+            val starterCmd = buildShizukuStarterCommand()
+            Log.d(TAG, "Starting Shizuku with robust command: $starterCmd")
+
+            // 1. Thử cổng 5555 trước, sau đó là Wireless Debugging port (mỗi cổng thử đúng 1 lần duy nhất)
+            var executed = false
+            val candidatePorts = mutableListOf(5555)
+            getWirelessDebugPort()?.let { if (it > 0 && it != 5555) candidatePorts.add(it) }
+
             for (port in candidatePorts) {
-                Log.d(TAG, "Thử kích hoạt Shizuku qua port $port (Lần thử $attempt)...")
-                val (success, output) = adbClient.executeCommand(starterCmd, port = port, timeoutMs = 4000)
+                Log.d(TAG, "Thử gửi lệnh khởi động Shizuku qua port $port...")
+                val (success, output) = adbClient.executeCommand(starterCmd, port = port, timeoutMs = 8000)
                 if (success) {
                     executed = true
                     Log.i(TAG, "✅ Lệnh khởi động Shizuku đã gửi thành công qua port $port. Output: $output")
                     break
                 } else {
-                    Log.w(TAG, "Lần thử $attempt qua port $port thất bại: $output")
+                    Log.w(TAG, "Không thể gửi lệnh qua port $port: $output")
+                    // Nếu user hủy hộp thoại hoặc timeout cấp quyền RSA, dừng ngay không thử port khác
+                    if (output.contains("timeout or cancelled") || adbClient.isAuthDeclinedRecently()) {
+                        break
+                    }
                 }
             }
-            if (executed) break
 
-            // Quét lại port Wireless Debugging phòng khi hệ thống vừa mở
-            val freshPort = getWirelessDebugPort()
-            if (freshPort != null && freshPort > 0 && freshPort !in candidatePorts) {
-                candidatePorts.add(freshPort)
-            }
-            delay(1500L)
-        }
-
-        // 2. Nếu gửi lệnh thành công, đợi Shizuku khởi động và kiểm tra pingBinder
-        if (executed) {
-            val startTime = System.currentTimeMillis()
-            while (System.currentTimeMillis() - startTime < 10000L) {
-                delay(500L)
-                try {
-                    if (Shizuku.pingBinder()) {
-                        Log.i(TAG, "✅ Shizuku service successfully started and binder is alive!")
-                        if (notifyOnSuccess) {
-                            NotificationHelper.showShizukuRestarted(context)
+            // 2. Nếu gửi lệnh thành công, đợi Shizuku khởi động và kiểm tra pingBinder
+            if (executed) {
+                val startTime = System.currentTimeMillis()
+                while (System.currentTimeMillis() - startTime < 10000L) {
+                    delay(500L)
+                    try {
+                        if (Shizuku.pingBinder()) {
+                            Log.i(TAG, "✅ Shizuku service successfully started and binder is alive!")
+                            if (notifyOnSuccess) {
+                                NotificationHelper.showShizukuRestarted(context)
+                            }
+                            return@withContext true
                         }
-                        return@withContext true
-                    }
-                } catch (_: Exception) {}
+                    } catch (_: Exception) {}
+                }
+                Log.w(TAG, "Command executed but Shizuku binder did not respond within 10s")
             }
-            Log.w(TAG, "Command executed but Shizuku binder did not respond within 10s")
-        }
 
-        return@withContext false
+            return@withContext false
+        } finally {
+            startMutex.unlock()
+        }
     }
 
     /**

@@ -158,7 +158,7 @@ class ShizukuManager @Inject constructor(
 
         // Bước 3: Gửi lệnh khởi động Shizuku qua ADB trực tiếp (không mở app Shizuku)
         android.util.Log.d("ShizukuManager", "⚡ Gửi lệnh ADB localhost:5555 khởi chạy dịch vụ Shizuku...")
-        autoStarter.startShizukuService(notifyOnSuccess = true)
+        autoStarter.startShizukuService(notifyOnSuccess = true, isManual = true)
         updateStatus()
 
         return isReady()
@@ -167,11 +167,10 @@ class ShizukuManager @Inject constructor(
     /**
      * Đảm bảo Shizuku sẵn sàng trước khi thực thi lệnh.
      *
-     * Flow 4 tầng:
+     * Flow 3 tầng nhẹ nhàng (KHÔNG tự ý gọi ADB để tránh spam popup hệ thống):
      * 1. Fast-path: isReady() → return ngay (0ms)
      * 2. Cache hit: trả kết quả cũ trong 30s (0ms, tránh spam trong 1 chu kỳ quét)
      * 3. Slow-path: pingBinder() trực tiếp + thử toggle Wireless Debugging nếu có quyền WRITE_SECURE_SETTINGS
-     * 4. ADB Start: Gửi lệnh khởi chạy trực tiếp qua ADB localhost:5555
      */
     suspend fun ensureReady(): Boolean {
         // Tầng 1: Fast-path
@@ -203,7 +202,7 @@ class ShizukuManager @Inject constructor(
             // Ignore
         }
 
-        // Tầng 4: Thử kích hoạt lại Shizuku qua toggle Wireless Debugging
+        // Thử kích hoạt lại Shizuku qua toggle Wireless Debugging
         // Chỉ thử nếu ngoài cooldown và có quyền WRITE_SECURE_SETTINGS
         if (now - lastReconnectAttemptTime > RECONNECT_COOLDOWN_MS) {
             if (tryToggleWirelessDebugging()) {
@@ -229,18 +228,7 @@ class ShizukuManager @Inject constructor(
             }
         }
 
-        // Tầng 5: Thử tự kích hoạt qua ADB localhost:5555
-        if (autoStarter.startShizukuService(notifyOnSuccess = false)) {
-            updateStatus()
-            if (isReady()) {
-                android.util.Log.d("ShizukuManager", "✅ Shizuku đã READY sau khi khởi động qua ADB!")
-                cachedReadyResult = true
-                cachedReadyTime = System.currentTimeMillis()
-                return true
-            }
-        }
-
-        // Shizuku thực sự chưa sẵn sàng
+        // Shizuku chưa sẵn sàng - trả về false nhẹ nhàng, không kích hoạt ADB socket ngầm
         val wdStatus = if (isWirelessDebuggingEnabled()) "BẬT" else "TẮT"
         android.util.Log.d("ShizukuManager", "⏳ Shizuku chưa sẵn sàng. Wireless Debugging: $wdStatus")
         cachedReadyResult = false

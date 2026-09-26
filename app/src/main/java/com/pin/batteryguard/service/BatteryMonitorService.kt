@@ -221,13 +221,6 @@ class BatteryMonitorService : LifecycleService() {
     private suspend fun runPeriodicScan() = withContext(Dispatchers.IO) {
         acquireWakeLock()
         try {
-            // Nếu Shizuku bị mất dịch vụ và bật Auto Start, thử khởi động lại trước khi quét
-            if (!shizukuManager.isReady() && config.enableAutoStartShizuku) {
-                android.util.Log.i(TAG, "Periodic scan: Shizuku not ready, attempting auto-start via ADB...")
-                shizukuAutoStarter.startShizukuService(notifyOnSuccess = true)
-                shizukuManager.updateStatus()
-            }
-
             if (!config.isMonitoringEnabled || !isScreenOff() || isCharging) {
                 pauseMonitoring("screen_on_or_charging")
                 return@withContext
