@@ -9,7 +9,6 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.EOFException
 import java.io.File
-import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.math.BigInteger
@@ -49,10 +48,34 @@ class AdbClient @Inject constructor(
         const val ADB_AUTH_TOKEN = 1
         const val ADB_AUTH_SIGNATURE = 2
         const val ADB_AUTH_RSAPUBLICKEY = 3
+
+        const val KEY_LENGTH_BITS = 2048
+        const val KEY_LENGTH_BYTES = KEY_LENGTH_BITS / 8
+        const val KEY_LENGTH_WORDS = KEY_LENGTH_BYTES / 4
+
+        /**
+         * Padding PKCS#1 v1.5 với ASN.1 header của SHA-1 theo chuẩn ADB protocol (AOSP mincrypt).
+         * 236 bytes padding + 20 bytes SHA-1 token = 256 bytes (2048-bit RSA block).
+         */
+        val SIGNATURE_PADDING: ByteArray by lazy {
+            val padding = ByteArray(236)
+            padding[0] = 0x00
+            padding[1] = 0x01
+            for (i in 2..219) {
+                padding[i] = 0xff.toByte()
+            }
+            padding[220] = 0x00
+            // ASN.1 DigestInfo prefix cho SHA-1 (15 bytes)
+            val asn1 = byteArrayOf(
+                0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0e,
+                0x03, 0x02, 0x1a, 0x05, 0x00, 0x04, 0x14
+            )
+            System.arraycopy(asn1, 0, padding, 221, asn1.size)
+            padding
+        }
     }
 
     private var cachedKeyPair: KeyPair? = null
-
     @Volatile private var lastAuthDeclinedOrTimeoutTime: Long = 0L
 
     fun isAuthDeclinedRecently(cooldownMs: Long = 10 * 60 * 1000L): Boolean {
@@ -101,7 +124,7 @@ class AdbClient @Inject constructor(
 
                 // Nếu thiết bị chưa trust public key này, gửi RSAPUBLICKEY để hiển thị prompt cho user
                 if (msg.command == A_AUTH && msg.arg0 == ADB_AUTH_TOKEN) {
-                    Log.i(TAG, "Thiết bị yêu cầu xác thực RSA Public Key. Đang hiển thị hộp thoại cấp quyền trên màn hình...")
+                    Log.i(TAG, "Thiết bị chưa ghi nhớ key, yêu cầu xác thực RSA. Đang hiển thị hộp thoại cấp quyền...")
                     val pubKeyData = formatAdbPublicKey(keyPair.public as RSAPublicKey)
                     // Tăng timeout lên 30 giây để người dùng kịp đọc và bấm 'Cho phép' trên màn hình
                     socket.soTimeout = 30000
@@ -174,72 +197,50 @@ class AdbClient @Inject constructor(
     }
 
     /**
-     * Ký token nhận từ adbd bằng RSA private key (PKCS#1 v1.5 padding).
+     * Ký token nhận từ adbd bằng RSA private key theo chuẩn AOSP mincrypt.
+     * Sử dụng RSA/ECB/NoPadding với mảng SIGNATURE_PADDING chuẩn để adbd xác minh thành công.
      */
     private fun signToken(privateKey: PrivateKey, token: ByteArray): ByteArray {
-        return try {
-            val cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding")
-            cipher.init(Cipher.ENCRYPT_MODE, privateKey)
-            cipher.doFinal(token)
-        } catch (e: Exception) {
-            val sig = java.security.Signature.getInstance("NONEwithRSA")
-            sig.initSign(privateKey)
-            sig.update(token)
-            sig.sign()
-        }
+        val cipher = Cipher.getInstance("RSA/ECB/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, privateKey)
+        cipher.update(SIGNATURE_PADDING)
+        return cipher.doFinal(token)
     }
 
     /**
      * Mã hóa RSA Public Key theo định dạng `struct RSAPublicKey` (mincrypt) của Android adbd.
+     * Dựa trên chuẩn RSA_to_RSAPublicKey trong AOSP / AdbLib của Cameron Gutman.
      */
     private fun formatAdbPublicKey(publicKey: RSAPublicKey): ByteArray {
-        val n = publicKey.modulus
-        val e = publicKey.publicExponent
-        val r32 = BigInteger.valueOf(2).pow(32)
-        val n0 = n.mod(r32)
-        val n0inv = n0.modInverse(r32).negate().mod(r32).toLong()
+        val r32 = BigInteger.ZERO.setBit(32)
+        var n = publicKey.modulus
+        val r = BigInteger.ZERO.setBit(KEY_LENGTH_WORDS * 32)
+        var rr = r.modPow(BigInteger.valueOf(2), n)
+        val rem = n.remainder(r32)
+        val n0inv = rem.modInverse(r32)
 
-        val r = BigInteger.valueOf(2).pow(2048)
-        val rr = r.multiply(r).mod(n)
+        val myN = IntArray(KEY_LENGTH_WORDS)
+        val myRr = IntArray(KEY_LENGTH_WORDS)
+        for (i in 0 until KEY_LENGTH_WORDS) {
+            val resRr = rr.divideAndRemainder(r32)
+            rr = resRr[0]
+            myRr[i] = resRr[1].toInt()
 
-        val bb = ByteBuffer.allocate(524).order(ByteOrder.LITTLE_ENDIAN)
-        bb.putInt(64) // len in 32-bit words (2048 / 32 = 64)
-        bb.putInt(n0inv.toInt())
-
-        val nBytes = getUnsignedBytes(n, 256)
-        for (i in 0 until 64) {
-            val offset = 256 - (i + 1) * 4
-            bb.put(nBytes[offset + 3])
-            bb.put(nBytes[offset + 2])
-            bb.put(nBytes[offset + 1])
-            bb.put(nBytes[offset])
+            val resN = n.divideAndRemainder(r32)
+            n = resN[0]
+            myN[i] = resN[1].toInt()
         }
 
-        val rrBytes = getUnsignedBytes(rr, 256)
-        for (i in 0 until 64) {
-            val offset = 256 - (i + 1) * 4
-            bb.put(rrBytes[offset + 3])
-            bb.put(rrBytes[offset + 2])
-            bb.put(rrBytes[offset + 1])
-            bb.put(rrBytes[offset])
-        }
+        val bbuf = ByteBuffer.allocate(524).order(ByteOrder.LITTLE_ENDIAN)
+        bbuf.putInt(KEY_LENGTH_WORDS)
+        bbuf.putInt(n0inv.negate().toInt())
+        for (i in myN) bbuf.putInt(i)
+        for (i in myRr) bbuf.putInt(i)
+        bbuf.putInt(publicKey.publicExponent.toInt())
 
-        bb.putInt(e.toInt())
-
-        val base64Key = Base64.encodeToString(bb.array(), Base64.NO_WRAP)
+        val base64Key = Base64.encodeToString(bbuf.array(), Base64.NO_WRAP)
         val keyString = "$base64Key BatteryGuard\u0000"
         return keyString.toByteArray(Charsets.UTF_8)
-    }
-
-    private fun getUnsignedBytes(bi: BigInteger, length: Int): ByteArray {
-        val raw = bi.toByteArray()
-        val result = ByteArray(length)
-        if (raw.size >= length) {
-            System.arraycopy(raw, raw.size - length, result, 0, length)
-        } else {
-            System.arraycopy(raw, 0, result, length - raw.size, raw.size)
-        }
-        return result
     }
 
     @Synchronized
@@ -266,7 +267,7 @@ class AdbClient @Inject constructor(
         }
 
         val kpg = KeyPairGenerator.getInstance("RSA")
-        kpg.initialize(2048)
+        kpg.initialize(KEY_LENGTH_BITS)
         val newKp = kpg.generateKeyPair()
 
         try {
@@ -288,64 +289,76 @@ data class AdbMessage(
     val command: Int,
     val arg0: Int,
     val arg1: Int,
+    val dataLength: Int,
+    val dataCrc32: Int,
+    val magic: Int,
     val data: ByteArray = ByteArray(0)
 ) {
-    fun write(output: OutputStream) {
-        val buf = ByteBuffer.allocate(24 + data.size).order(ByteOrder.LITTLE_ENDIAN)
-        buf.putInt(command)
-        buf.putInt(arg0)
-        buf.putInt(arg1)
-        buf.putInt(data.size)
-        buf.putInt(checksum(data))
-        buf.putInt(command xor -0x1)
-        if (data.isNotEmpty()) {
-            buf.put(data)
-        }
-        output.write(buf.array())
-        output.flush()
-    }
-
     companion object {
-        fun checksum(data: ByteArray): Int {
-            var sum = 0
-            for (b in data) {
-                sum += (b.toInt() and 0xFF)
-            }
-            return sum
-        }
-
         fun read(input: InputStream): AdbMessage {
             val header = ByteArray(24)
             var read = 0
             while (read < 24) {
-                val r = input.read(header, read, 24 - read)
-                if (r < 0) throw EOFException("ADB connection closed while reading header")
-                read += r
-            }
-            val buf = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN)
-            val command = buf.int
-            val arg0 = buf.int
-            val arg1 = buf.int
-            val dataLen = buf.int
-            val dataChecksum = buf.int
-            val magic = buf.int
-
-            if (command != (magic xor -0x1)) {
-                throw IOException("Corrupted ADB header: command=0x${Integer.toHexString(command)}, magic=0x${Integer.toHexString(magic)}")
+                val count = input.read(header, read, 24 - read)
+                if (count == -1) throw EOFException("Socket closed while reading header")
+                read += count
             }
 
-            if (dataLen < 0 || dataLen > 65536) {
-                throw IOException("Invalid or excessive ADB data payload length: $dataLen")
+            val bb = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN)
+            val command = bb.getInt()
+            val arg0 = bb.getInt()
+            val arg1 = bb.getInt()
+            val dataLength = bb.getInt()
+            val dataCrc32 = bb.getInt()
+            val magic = bb.getInt()
+
+            val data = if (dataLength > 0) {
+                val dataBuffer = ByteArray(dataLength)
+                read = 0
+                while (read < dataLength) {
+                    val count = input.read(dataBuffer, read, dataLength - read)
+                    if (count == -1) throw EOFException("Socket closed while reading data")
+                    read += count
+                }
+                dataBuffer
+            } else {
+                ByteArray(0)
             }
 
-            val data = ByteArray(dataLen)
-            var dataRead = 0
-            while (dataRead < dataLen) {
-                val r = input.read(data, dataRead, dataLen - dataRead)
-                if (r < 0) throw EOFException("ADB connection closed while reading data payload")
-                dataRead += r
-            }
-            return AdbMessage(command, arg0, arg1, data)
+            return AdbMessage(command, arg0, arg1, dataLength, dataCrc32, magic, data)
         }
     }
+
+    constructor(command: Int, arg0: Int, arg1: Int, data: ByteArray = ByteArray(0)) : this(
+        command = command,
+        arg0 = arg0,
+        arg1 = arg1,
+        dataLength = data.size,
+        dataCrc32 = calculateChecksum(data),
+        magic = command xor -0x1,
+        data = data
+    )
+
+    fun write(output: OutputStream) {
+        val bb = ByteBuffer.allocate(24 + data.size).order(ByteOrder.LITTLE_ENDIAN)
+        bb.putInt(command)
+        bb.putInt(arg0)
+        bb.putInt(arg1)
+        bb.putInt(dataLength)
+        bb.putInt(dataCrc32)
+        bb.putInt(magic)
+        if (data.isNotEmpty()) {
+            bb.put(data)
+        }
+        output.write(bb.array())
+        output.flush()
+    }
+}
+
+private fun calculateChecksum(data: ByteArray): Int {
+    var sum = 0
+    for (b in data) {
+        sum += (b.toInt() and 0xFF)
+    }
+    return sum
 }

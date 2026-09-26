@@ -73,8 +73,8 @@ class ShizukuAutoStarter @Inject constructor(
                 return@withContext true
             }
 
-            // === CÁCH 2: Fallback qua ADB TCP (cần auth RSA) ===
-            delay(1500L) // ADB daemon cần thời gian khởi tạo socket
+            // daemon adbd cần thời gian khởi tạo socket sau khi bật Dev Mode và ADB
+            delay(2500L)
             val starterCmd = buildShizukuStarterCommand()
             Log.d(TAG, "Fallback: Starting Shizuku via ADB TCP: $starterCmd")
 

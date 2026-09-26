@@ -405,8 +405,8 @@ class AppShieldManager @Inject constructor(
             if (config.autoRestartShizuku && snapshot.wasShizukuRunning) {
                 Log.i(TAG, "Tự động kích hoạt lại Shizuku qua ShizukuAutoStarter...")
                 try {
-                    // BUG #2 fix: Chờ ADB daemon bind port sau khi bật lại
-                    delay(2000)
+                    // Chờ ADB daemon bind port sau khi bật lại Dev Mode và ADB
+                    delay(3000)
                     revivedShizuku = shizukuAutoStarter.startShizukuService(notifyOnSuccess = false)
                     Log.i(TAG, "Kết quả hồi sinh Shizuku: $revivedShizuku")
                 } catch (e: Exception) {
