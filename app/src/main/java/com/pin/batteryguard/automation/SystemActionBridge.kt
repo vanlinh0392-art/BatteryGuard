@@ -150,40 +150,75 @@ object SystemActionBridge {
 
     /**
      * 1. 📶 Tự động Bật/Tắt Dữ liệu Di động (4G/5G)
+     * Lưu ý: Settings.Global.putInt("mobile_data") chỉ cập nhật DB hiển thị nhưng không ngắt packet service
+     * của modem radio trên Android 10+. Do đó, hàm sẽ:
+     * - Cập nhật Settings.Global để đồng bộ icon/UI nếu có quyền.
+     * - Bắt buộc thực thi lệnh shell phần cứng (cmd phone data / svc data) qua Shizuku hoặc Local ADB.
      */
     suspend fun toggleMobileData(context: Context, enable: Boolean, targetSim: TargetSimSelection) {
         val flag = if (enable) 1 else 0
         val subId = SimHelper.getTargetSubId(context, targetSim)
 
-        tryDirectThenFallback(
-            actionName = "ToggleMobileData_${if (enable) "ON" else "OFF"}_$targetSim",
-            directAction = {
-                if (!hasWriteSecureSettings(context)) return@tryDirectThenFallback false
-
+        // 1. Cập nhật Settings.Global (đồng bộ UI icon hệ thống)
+        try {
+            if (hasWriteSecureSettings(context)) {
                 val cr = context.contentResolver
-                var success = false
-
-                // Nếu chọn AUTO, thử ghi Settings.Global.MOBILE_DATA
-                if (targetSim == TargetSimSelection.AUTO) {
-                    success = Settings.Global.putInt(cr, "mobile_data", flag)
-                    if (subId != null && subId > 0) {
-                        Settings.Global.putInt(cr, "mobile_data$subId", flag)
-                    }
-                } else if (subId != null && subId > 0) {
-                    // Nếu chọn SIM cụ thể, thử ghi key subId
-                    success = Settings.Global.putInt(cr, "mobile_data$subId", flag)
-                }
-
-                success
-            },
-            fallbackAction = {
-                val cmds = SimHelper.buildToggleDataCommands(enable, targetSim, context)
-                for (cmd in cmds) {
-                    val parts = cmd.split(" ").toTypedArray()
-                    executeShizukuCommandWithTimeout(parts, timeoutMs = 3500L)
+                Settings.Global.putInt(cr, "mobile_data", flag)
+                if (subId != null && subId > 0) {
+                    Settings.Global.putInt(cr, "mobile_data$subId", flag)
                 }
             }
-        )
+        } catch (e: Exception) {
+            Log.w(TAG, "Không thể cập nhật Settings.Global.mobile_data: ${e.message}")
+        }
+
+        // 2. Kích hoạt lệnh phần cứng qua Shizuku Shell hoặc Local ADB
+        val cmds = SimHelper.buildToggleDataCommands(enable, targetSim, context)
+        var executed = false
+
+        // Tầng 1: Ưu tiên thực thi qua Shizuku Shell nếu Shizuku READY
+        try {
+            if (Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                for (cmd in cmds) {
+                    val parts = cmd.split(" ").toTypedArray()
+                    val res = executeShizukuCommandWithTimeout(parts, timeoutMs = 3000L)
+                    if (res.isSuccess) {
+                        Log.d(TAG, "✅ [ToggleMobileData] Đã thực thi qua Shizuku: $cmd")
+                        executed = true
+                        break
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Lỗi thực thi Mobile Data qua Shizuku: ${e.message}")
+        }
+
+        // Tầng 2: Fallback qua Local ADB Client (port 5555 hoặc Wireless Debugging port)
+        if (!executed) {
+            try {
+                val client = AdbClient(context.applicationContext)
+                val ports = mutableListOf(5555)
+                getWirelessDebugPort()?.let { if (it > 0 && it != 5555) ports.add(it) }
+
+                for (port in ports) {
+                    for (cmd in cmds) {
+                        val (success, _) = client.executeCommand(cmd, port = port, timeoutMs = 3000)
+                        if (success) {
+                            Log.d(TAG, "✅ [ToggleMobileData] Đã thực thi qua Local ADB port $port: $cmd")
+                            executed = true
+                            break
+                        }
+                    }
+                    if (executed) break
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Lỗi thực thi Mobile Data qua Local ADB: ${e.message}")
+            }
+        }
+
+        if (!executed) {
+            Log.w(TAG, "⚠️ [ToggleMobileData] Chưa thể ngắt dữ liệu (cần Shizuku hoặc ADB kết nối)")
+        }
     }
 
     /**

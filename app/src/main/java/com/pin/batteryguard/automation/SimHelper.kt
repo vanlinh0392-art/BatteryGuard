@@ -85,43 +85,19 @@ object SimHelper {
      * Tạo danh sách shell commands để bật/tắt dữ liệu di động chính xác theo SIM đã chọn
      */
     fun buildToggleDataCommands(enable: Boolean, targetSim: TargetSimSelection, context: Context): List<String> {
-        val enableStr = enable.toString()
-        val svcStr = if (enable) "enable" else "disable"
+        val action = if (enable) "enable" else "disable"
         val commands = mutableListOf<String>()
 
         val subId = getTargetSubId(context, targetSim)
 
-        when (targetSim) {
-            TargetSimSelection.AUTO -> {
-                // Ưu tiên truyền subId nếu xác định được default data SIM
-                if (subId != null && subId > 0) {
-                    commands.add("cmd phone data set-data-enabled $enableStr $subId")
-                }
-                // Luôn gọi lệnh chung (áp dụng cho default data SIM trên AOSP)
-                commands.add("cmd phone data set-data-enabled $enableStr")
-                commands.add("svc data $svcStr")
-            }
-
-            TargetSimSelection.SIM_1 -> {
-                if (subId != null && subId > 0) {
-                    commands.add("cmd phone data set-data-enabled $enableStr $subId")
-                } else {
-                    // Fallback giả định subId phổ biến hoặc slot 0
-                    commands.add("cmd phone data set-data-enabled $enableStr 1")
-                }
-                commands.add("cmd telephony data $svcStr 0")
-            }
-
-            TargetSimSelection.SIM_2 -> {
-                if (subId != null && subId > 0) {
-                    commands.add("cmd phone data set-data-enabled $enableStr $subId")
-                } else {
-                    // Fallback giả định subId phổ biến hoặc slot 1
-                    commands.add("cmd phone data set-data-enabled $enableStr 2")
-                }
-                commands.add("cmd telephony data $svcStr 1")
-            }
+        // 1. Nếu có subId cụ thể cho SIM được chọn (SIM 1, SIM 2 hoặc AUTO), thử lệnh per-subId
+        if (subId != null && subId > 0) {
+            commands.add("cmd phone data $action $subId")
         }
+
+        // 2. Lệnh tiêu chuẩn AOSP tác động lên SIM dữ liệu mặc định (hoạt động 100% trên toàn bộ các dòng máy)
+        commands.add("svc data $action")
+        commands.add("cmd phone data $action")
 
         return commands
     }
