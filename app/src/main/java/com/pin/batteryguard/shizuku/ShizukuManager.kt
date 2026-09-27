@@ -61,10 +61,18 @@ class ShizukuManager @Inject constructor(
         com.pin.batteryguard.util.NotificationHelper.showShizukuDisconnected(context)
     }
 
+    private val requestPermissionResultListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
+        android.util.Log.d("ShizukuManager", "🔑 Shizuku RequestPermissionResult: code=$requestCode, result=$grantResult")
+        invalidateCache()
+        permissionsGranted = false // Reset để cho phép trigger auto-grant ngay khi được cấp quyền
+        updateStatus()
+    }
+
     init {
         try {
             Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
             Shizuku.addBinderDeadListener(binderDeadListener)
+            Shizuku.addRequestPermissionResultListener(requestPermissionResultListener)
             updateStatus()
         } catch (e: Throwable) {
             _status.value = ShizukuStatus.NOT_INSTALLED
@@ -331,42 +339,59 @@ class ShizukuManager @Inject constructor(
         cachedReadyTime = 0
     }
 
-    private fun grantSystemPermissions() {
-        // BUG #2 FIX: Chỉ chạy 1 lần mỗi session, tránh spam shell mỗi lần updateStatus()
-        if (permissionsGranted) return
+    fun grantSystemPermissions(onCompleted: ((Boolean) -> Unit)? = null) {
+        val hasSecure = hasWriteSecureSettings()
+        val hasStats = context.checkSelfPermission("android.permission.BATTERY_STATS") == PackageManager.PERMISSION_GRANTED
+        val hasDump = context.checkSelfPermission("android.permission.DUMP") == PackageManager.PERMISSION_GRANTED
+
+        if (hasSecure && hasStats && hasDump) {
+            permissionsGranted = true
+            onCompleted?.invoke(true)
+            return
+        }
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val packageName = context.packageName
                 val permsToGrant = mutableListOf<String>()
 
-                // Chỉ grant quyền nào chưa có — tránh spam shell command mỗi lần Shizuku reconnect
-                if (context.checkSelfPermission("android.permission.BATTERY_STATS") != PackageManager.PERMISSION_GRANTED) {
+                // Chỉ grant quyền nào chưa có
+                if (!hasStats) {
                     permsToGrant.add("android.permission.BATTERY_STATS")
                 }
-                if (context.checkSelfPermission("android.permission.DUMP") != PackageManager.PERMISSION_GRANTED) {
+                if (!hasDump) {
                     permsToGrant.add("android.permission.DUMP")
                 }
-                if (!hasWriteSecureSettings()) {
+                if (!hasSecure) {
                     permsToGrant.add("android.permission.WRITE_SECURE_SETTINGS")
                 }
 
                 if (permsToGrant.isEmpty()) {
                     android.util.Log.d("ShizukuManager", "✅ Tất cả quyền đã được cấp, bỏ qua grant")
                     permissionsGranted = true
+                    onCompleted?.invoke(true)
                     return@launch
                 }
 
+                var successCount = 0
                 for (perm in permsToGrant) {
                     val result = executeShizukuCommandWithTimeout(arrayOf("pm", "grant", packageName, perm), timeoutMs = 5000L)
-                    if (!result.isSuccess) {
+                    if (result.isSuccess) {
+                        successCount++
+                    } else {
                         android.util.Log.w("ShizukuManager", "⚠️ Không thể cấp quyền $perm: ${result.stderr}")
                     }
                 }
-                android.util.Log.d("ShizukuManager", "✅ Đã grant ${permsToGrant.size} quyền: ${permsToGrant.joinToString { it.substringAfterLast('.') }}")
-                permissionsGranted = true
+
+                val secureGranted = hasWriteSecureSettings()
+                android.util.Log.d("ShizukuManager", "✅ Đã grant qua Shizuku. WRITE_SECURE_SETTINGS = $secureGranted")
+                if (secureGranted) {
+                    permissionsGranted = true
+                }
+                onCompleted?.invoke(secureGranted)
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("ShizukuManager", "❌ Lỗi khi tự động cấp quyền qua Shizuku: ${e.message}")
+                onCompleted?.invoke(false)
             }
         }
     }
@@ -375,6 +400,7 @@ class ShizukuManager @Inject constructor(
         try {
             Shizuku.removeBinderReceivedListener(binderReceivedListener)
             Shizuku.removeBinderDeadListener(binderDeadListener)
+            Shizuku.removeRequestPermissionResultListener(requestPermissionResultListener)
         } catch (e: Exception) {
             // Ignore
         }

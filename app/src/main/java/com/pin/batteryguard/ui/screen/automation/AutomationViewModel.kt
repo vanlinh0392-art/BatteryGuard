@@ -16,6 +16,7 @@ import com.pin.batteryguard.automation.AutomationCoordinator
 import com.pin.batteryguard.automation.AutomationDataStore
 import com.pin.batteryguard.automation.AutomationMasterConfig
 import com.pin.batteryguard.automation.SimHelper
+import com.pin.batteryguard.automation.SystemActionBridge
 import com.pin.batteryguard.shizuku.ShizukuManager
 import com.pin.batteryguard.shizuku.ShizukuStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -45,6 +46,7 @@ class AutomationViewModel @Inject constructor(
         observeShizukuStatus()
         observeDataStoreAndCoordinator()
         refreshBatteryState()
+        triggerAutoGrant()
     }
 
     private fun detectAvailableSims() {
@@ -55,7 +57,46 @@ class AutomationViewModel @Inject constructor(
     private fun observeShizukuStatus() {
         viewModelScope.launch {
             shizukuManager.status.collectLatest { status ->
-                _uiState.update { it.copy(isShizukuReady = status == ShizukuStatus.READY) }
+                var hasSecure = SystemActionBridge.hasWriteSecureSettings(context)
+
+                // Tự động cấp quyền WRITE_SECURE_SETTINGS khi đủ điều kiện ADB / Shizuku
+                if (status == ShizukuStatus.READY && !hasSecure) {
+                    shizukuManager.grantSystemPermissions { granted ->
+                        if (granted) {
+                            _uiState.update { it.copy(hasWriteSecureSettings = true) }
+                        }
+                    }
+                    hasSecure = SystemActionBridge.hasWriteSecureSettings(context)
+                }
+
+                _uiState.update {
+                    it.copy(
+                        isShizukuReady = status == ShizukuStatus.READY,
+                        hasWriteSecureSettings = hasSecure
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Chủ động thử tự động cấp WRITE_SECURE_SETTINGS khi đủ điều kiện ADB (Shizuku hoặc Local ADB)
+     */
+    fun triggerAutoGrant() {
+        viewModelScope.launch {
+            if (shizukuManager.isReady()) {
+                shizukuManager.grantSystemPermissions { granted ->
+                    if (granted) {
+                        _uiState.update { it.copy(hasWriteSecureSettings = true) }
+                    }
+                }
+            } else {
+                val granted = SystemActionBridge.autoGrantWriteSecureSettingsIfAdbAvailable(context)
+                if (granted) {
+                    _uiState.update { it.copy(hasWriteSecureSettings = true) }
+                } else if (!shizukuManager.checkPermission()) {
+                    shizukuManager.requestPermission(101)
+                }
             }
         }
     }
@@ -176,7 +217,8 @@ class AutomationViewModel @Inject constructor(
                 activeRulesCount = activeCount,
                 enabledRulesCount = enabledCount,
                 isWifiConnected = isWifi,
-                autoSortActiveToTop = config.autoSortActiveToTop
+                autoSortActiveToTop = config.autoSortActiveToTop,
+                hasWriteSecureSettings = SystemActionBridge.hasWriteSecureSettings(context)
             )
         }
     }

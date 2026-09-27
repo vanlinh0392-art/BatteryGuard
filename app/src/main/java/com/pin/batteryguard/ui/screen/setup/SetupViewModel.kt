@@ -47,6 +47,9 @@ class SetupViewModel @Inject constructor(
         viewModelScope.launch {
             shizukuManager.status.collectLatest { status ->
                 _uiState.update { it.copy(shizukuStatus = status) }
+                if (status == ShizukuStatus.READY) {
+                    shizukuManager.grantSystemPermissions()
+                }
             }
         }
         checkPermissions()

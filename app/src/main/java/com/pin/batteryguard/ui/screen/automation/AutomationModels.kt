@@ -138,6 +138,7 @@ data class AutomationUiState(
     val estimatedBatterySavingsPercent: Int = 22,
     val expandedRuleId: AutomationRuleId? = null,
     val isShizukuReady: Boolean = false,
+    val hasWriteSecureSettings: Boolean = false,
     val currentBatteryPercent: Int = 75,
     val isCurrentlyCharging: Boolean = false,
     val isWifiConnected: Boolean = true,

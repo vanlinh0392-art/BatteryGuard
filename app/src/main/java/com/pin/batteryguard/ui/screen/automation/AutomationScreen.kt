@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -131,7 +132,9 @@ fun AutomationScreen(
                     totalCount = uiState.rules.size,
                     estimatedSavings = uiState.estimatedBatterySavingsPercent,
                     isShizukuReady = uiState.isShizukuReady,
-                    onToggleMaster = { viewModel.toggleMaster(it) }
+                    hasWriteSecureSettings = uiState.hasWriteSecureSettings,
+                    onToggleMaster = { viewModel.toggleMaster(it) },
+                    onRequestGrant = { viewModel.triggerAutoGrant() }
                 )
             }
 
@@ -261,7 +264,9 @@ fun CompactMasterControlCard(
     totalCount: Int,
     estimatedSavings: Int,
     isShizukuReady: Boolean,
-    onToggleMaster: (Boolean) -> Unit
+    hasWriteSecureSettings: Boolean = false,
+    onToggleMaster: (Boolean) -> Unit,
+    onRequestGrant: () -> Unit = {}
 ) {
     val gradientColors = if (isMasterEnabled) {
         listOf(
@@ -348,8 +353,22 @@ fun CompactMasterControlCard(
 
                 Spacer(modifier = Modifier.height(2.dp))
 
-                // Dòng phụ: Tiết kiệm pin & Trạng thái Shizuku
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // Dòng phụ: Tiết kiệm pin & Trạng thái hoạt động (Quyền Hệ thống / Shizuku)
+                val isOperational = isShizukuReady || hasWriteSecureSettings
+                val readinessLabel = when {
+                    isShizukuReady -> "Shizuku Sẵn sàng"
+                    hasWriteSecureSettings -> "Quyền Hệ thống"
+                    else -> "Cần cấp quyền"
+                }
+                val readinessColor = if (isOperational) Green80 else BatteryLow
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable { onRequestGrant() }
+                        .padding(vertical = 1.dp)
+                ) {
                     Text(
                         text = "Tiết kiệm ~$estimatedSavings% • ",
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
@@ -359,15 +378,15 @@ fun CompactMasterControlCard(
                         modifier = Modifier
                             .size(5.dp)
                             .clip(CircleShape)
-                            .background(if (isShizukuReady) BatteryFull else BatteryLow)
+                            .background(readinessColor)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = if (isShizukuReady) "Shizuku Sẵn sàng" else "Cần Shizuku",
+                        text = readinessLabel,
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.Medium,
-                            color = if (isShizukuReady) Green80 else BatteryLow
+                            color = readinessColor
                         )
                     )
                 }

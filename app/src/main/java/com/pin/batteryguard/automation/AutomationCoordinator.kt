@@ -73,6 +73,7 @@ class AutomationCoordinator @Inject constructor(
 
     private var currentBatteryLevel = 100
     private var isCurrentlyCharging = false
+    private var hasNotifiedOvernightCharging = false
     private var lastScreenOffTime = 0L
 
     companion object {
@@ -263,18 +264,8 @@ class AutomationCoordinator @Inject constructor(
     }
 
     private suspend fun executeMobileDataToggle(enable: Boolean, targetSim: TargetSimSelection) {
-        val cmds = SimHelper.buildToggleDataCommands(enable, targetSim, context)
-        Log.i(TAG, "Thực thi Toggle Mobile Data (${if (enable) "BẬT" else "TẮT"}) cho SIM $targetSim:")
-        for (cmd in cmds) {
-            try {
-                Log.d(TAG, ">>> Run shell: $cmd")
-                val parts = cmd.split(" ").toTypedArray()
-                val result = executeShizukuCommandWithTimeout(parts, timeoutMs = 4000L)
-                Log.d(TAG, "<<< Kết quả: exitCode=${result.exitCode}, stdout=${result.stdout}")
-            } catch (e: Exception) {
-                Log.w(TAG, "Lỗi chạy lệnh '$cmd': ${e.message}")
-            }
-        }
+        Log.i(TAG, "Thực thi Toggle Mobile Data (${if (enable) "BẬT" else "TẮT"}) cho SIM $targetSim (Ưu tiên Native First)")
+        SystemActionBridge.toggleMobileData(context, enable, targetSim)
     }
 
     // =========================================================================
@@ -329,20 +320,8 @@ class AutomationCoordinator @Inject constructor(
         }
 
         scope?.launch(Dispatchers.IO) {
-            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
             if (isNightTime) {
-                val targetMode = if (p.nightMode == RingerTargetMode.SILENT) {
-                    AudioManager.RINGER_MODE_SILENT
-                } else {
-                    AudioManager.RINGER_MODE_VIBRATE
-                }
-                val modeCode = if (p.nightMode == RingerTargetMode.SILENT) "0" else "1"
-
-                try {
-                    audioManager.ringerMode = targetMode
-                } catch (_: Exception) {
-                    executeShizukuCommandWithTimeout(arrayOf("cmd", "audio", "set-ringer-mode", modeCode), 3000L)
-                }
+                SystemActionBridge.setRingerMode(context, p.nightMode)
 
                 updateRuleState(
                     AutomationRuleId.DAY_NIGHT_RINGER,
@@ -351,11 +330,7 @@ class AutomationCoordinator @Inject constructor(
                     "Khung giờ: ${String.format("%02d:%02d", p.startHour, p.startMinute)} - ${String.format("%02d:%02d", p.endHour, p.endMinute)}"
                 )
             } else {
-                try {
-                    audioManager.ringerMode = AudioManager.RINGER_MODE_NORMAL
-                } catch (_: Exception) {
-                    executeShizukuCommandWithTimeout(arrayOf("cmd", "audio", "set-ringer-mode", "2"), 3000L)
-                }
+                SystemActionBridge.setNormalRingerMode(context)
 
                 updateRuleState(
                     AutomationRuleId.DAY_NIGHT_RINGER,
@@ -420,6 +395,10 @@ class AutomationCoordinator @Inject constructor(
 
         if (!currentConfig.isMasterEnabled) return
 
+        if (!charging) {
+            hasNotifiedOvernightCharging = false
+        }
+
         // Module 3: Sạc qua đêm bảo vệ pin
         if (currentConfig.overnightChargingEnabled && charging) {
             val overnightParams = currentConfig.overnightChargingParams
@@ -442,8 +421,10 @@ class AutomationCoordinator @Inject constructor(
                     "Đã đạt mức sạc $level% (Giới hạn: $limit%)",
                     "Vui lòng ngắt sạc để bảo vệ tuổi thọ pin"
                 )
-                if (overnightParams.alertSoundOnTarget) {
+                if (overnightParams.alertSoundOnTarget && !hasNotifiedOvernightCharging) {
+                    hasNotifiedOvernightCharging = true
                     showOvernightAlertNotification(level, limit)
+                    SystemActionBridge.applySmartChargingLimit(context, limit)
                 }
             } else {
                 updateRuleState(
@@ -462,10 +443,10 @@ class AutomationCoordinator @Inject constructor(
             if (!charging && level <= threshold) {
                 scope?.launch(Dispatchers.IO) {
                     if (saverParams.enableSystemPowerSaver) {
-                        executeShizukuCommandWithTimeout(arrayOf("cmd", "power", "set-mode", "1"), 3000L)
+                        SystemActionBridge.setPowerSaveMode(context, enable = true)
                     }
                     if (saverParams.dimDisplayBrightness) {
-                        executeShizukuCommandWithTimeout(arrayOf("settings", "put", "system", "min_refresh_rate", "60.0"), 3000L)
+                        SystemActionBridge.setDisplayRefreshRate60Hz(context)
                     }
                 }
                 updateRuleState(
@@ -476,7 +457,7 @@ class AutomationCoordinator @Inject constructor(
                 )
             } else if (charging && chargingStateChanged) {
                 scope?.launch(Dispatchers.IO) {
-                    executeShizukuCommandWithTimeout(arrayOf("cmd", "power", "set-mode", "0"), 3000L)
+                    SystemActionBridge.setPowerSaveMode(context, enable = false)
                 }
                 updateRuleState(
                     AutomationRuleId.LOW_BATTERY_SAVER,
@@ -506,7 +487,7 @@ class AutomationCoordinator @Inject constructor(
             delay(delayMin * 60 * 1000L)
             Log.i(TAG, "📴 Kích hoạt sớm Deep Doze sau ${delayMin} phút tắt màn hình")
             if (deepParams.enableDeepDoze) {
-                executeShizukuCommandWithTimeout(arrayOf("dumpsys", "deviceidle", "force-idle"), 3000L)
+                SystemActionBridge.triggerDeepDoze()
             }
             updateRuleState(
                 AutomationRuleId.DEEP_SCREEN_OFF,
