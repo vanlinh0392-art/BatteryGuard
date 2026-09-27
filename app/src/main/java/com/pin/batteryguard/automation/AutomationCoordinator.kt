@@ -316,8 +316,12 @@ class AutomationCoordinator @Inject constructor(
         val currentMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
         val startMinutes = p.startHour * 60 + p.startMinute
         val endMinutes = p.endHour * 60 + p.endMinute
+        val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
+        val isWeekend = (dayOfWeek == Calendar.SATURDAY || dayOfWeek == Calendar.SUNDAY)
 
-        val isNightTime = if (startMinutes > endMinutes) {
+        val isNightTime = if (!p.applyOnWeekends && isWeekend) {
+            false // Không áp dụng chế độ ban đêm vào cuối tuần nếu người dùng tắt
+        } else if (startMinutes > endMinutes) {
             // Qua nửa đêm (Ví dụ: 21:30 -> 06:00)
             currentMinutes >= startMinutes || currentMinutes < endMinutes
         } else {
@@ -418,10 +422,18 @@ class AutomationCoordinator @Inject constructor(
 
         // Module 3: Sạc qua đêm bảo vệ pin
         if (currentConfig.overnightChargingEnabled && charging) {
-            val limit = currentConfig.overnightChargingParams.maxChargeLimitPercent
+            val overnightParams = currentConfig.overnightChargingParams
+            val limit = overnightParams.maxChargeLimitPercent
             val cal = Calendar.getInstance()
             val hour = cal.get(Calendar.HOUR_OF_DAY)
-            val isNightHours = (hour >= 22 || hour < 6)
+            val startH = overnightParams.startHour
+            val endH = overnightParams.endHour
+
+            val isNightHours = if (startH > endH) {
+                hour >= startH || hour < endH
+            } else {
+                hour in startH until endH
+            }
 
             if (isNightHours && level >= limit) {
                 updateRuleState(
@@ -430,24 +442,31 @@ class AutomationCoordinator @Inject constructor(
                     "Đã đạt mức sạc $level% (Giới hạn: $limit%)",
                     "Vui lòng ngắt sạc để bảo vệ tuổi thọ pin"
                 )
-                showOvernightAlertNotification(level, limit)
+                if (overnightParams.alertSoundOnTarget) {
+                    showOvernightAlertNotification(level, limit)
+                }
             } else {
                 updateRuleState(
                     AutomationRuleId.OVERNIGHT_CHARGING,
                     RuleActiveStatus.IDLE,
                     "Đang sạc (${level}% / ${limit}%)",
-                    "Giám sát sạc đêm bảo vệ pin"
+                    "Khung giờ đêm: ${String.format("%02d:00", startH)} - ${String.format("%02d:00", endH)}"
                 )
             }
         }
 
         // Module 4: Tự động tiết kiệm pin khi pin yếu
         if (currentConfig.lowBatterySaverEnabled) {
-            val threshold = currentConfig.lowBatterySaverParams.thresholdPercent
+            val saverParams = currentConfig.lowBatterySaverParams
+            val threshold = saverParams.thresholdPercent
             if (!charging && level <= threshold) {
                 scope?.launch(Dispatchers.IO) {
-                    executeShizukuCommandWithTimeout(arrayOf("cmd", "power", "set-mode", "1"), 3000L)
-                    executeShizukuCommandWithTimeout(arrayOf("settings", "put", "system", "min_refresh_rate", "60.0"), 3000L)
+                    if (saverParams.enableSystemPowerSaver) {
+                        executeShizukuCommandWithTimeout(arrayOf("cmd", "power", "set-mode", "1"), 3000L)
+                    }
+                    if (saverParams.dimDisplayBrightness) {
+                        executeShizukuCommandWithTimeout(arrayOf("settings", "put", "system", "min_refresh_rate", "60.0"), 3000L)
+                    }
                 }
                 updateRuleState(
                     AutomationRuleId.LOW_BATTERY_SAVER,
@@ -473,7 +492,8 @@ class AutomationCoordinator @Inject constructor(
         lastScreenOffTime = System.currentTimeMillis()
         if (!currentConfig.isMasterEnabled || !currentConfig.deepScreenOffEnabled) return
 
-        val delayMin = currentConfig.deepScreenOffParams.delayMinutes
+        val deepParams = currentConfig.deepScreenOffParams
+        val delayMin = deepParams.delayMinutes
         updateRuleState(
             AutomationRuleId.DEEP_SCREEN_OFF,
             RuleActiveStatus.IDLE,
@@ -485,7 +505,9 @@ class AutomationCoordinator @Inject constructor(
         screenOffDozeJob = scope?.launch(Dispatchers.IO) {
             delay(delayMin * 60 * 1000L)
             Log.i(TAG, "📴 Kích hoạt sớm Deep Doze sau ${delayMin} phút tắt màn hình")
-            executeShizukuCommandWithTimeout(arrayOf("dumpsys", "deviceidle", "force-idle"), 3000L)
+            if (deepParams.enableDeepDoze) {
+                executeShizukuCommandWithTimeout(arrayOf("dumpsys", "deviceidle", "force-idle"), 3000L)
+            }
             updateRuleState(
                 AutomationRuleId.DEEP_SCREEN_OFF,
                 RuleActiveStatus.ACTIVE,

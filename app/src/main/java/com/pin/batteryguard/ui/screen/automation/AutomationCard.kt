@@ -30,11 +30,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -47,8 +50,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -420,9 +429,36 @@ fun AutomationConfigEditor(
         // 2. 🔔 Tự động chuyển chuông theo giờ
         AutomationRuleId.DAY_NIGHT_RINGER -> {
             val config = params as? DayNightRingerParams ?: DayNightRingerParams()
+            var showStartTimePicker by remember { mutableStateOf(false) }
+            var showEndTimePicker by remember { mutableStateOf(false) }
+
+            if (showStartTimePicker) {
+                AutomationTimePickerDialog(
+                    title = "Giờ bắt đầu chuyển Rung/Im lặng",
+                    initialHour = config.startHour,
+                    initialMinute = config.startMinute,
+                    onDismissRequest = { showStartTimePicker = false },
+                    onConfirm = { h, m ->
+                        onUpdateParams(config.copy(startHour = h, startMinute = m))
+                    }
+                )
+            }
+
+            if (showEndTimePicker) {
+                AutomationTimePickerDialog(
+                    title = "Giờ kết thúc (Bật lại chuông thường)",
+                    initialHour = config.endHour,
+                    initialMinute = config.endMinute,
+                    onDismissRequest = { showEndTimePicker = false },
+                    onConfirm = { h, m ->
+                        onUpdateParams(config.copy(endHour = h, endMinute = m))
+                    }
+                )
+            }
+
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    text = "Khung giờ ban đêm (Tự chuyển chế độ):",
+                    text = "Khung giờ ban đêm (Chạm vào ô để đổi giờ):",
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
                 )
                 Row(
@@ -432,28 +468,50 @@ fun AutomationConfigEditor(
                     Surface(
                         shape = RoundedCornerShape(10.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { showStartTimePicker = true }
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
-                            Text("Bắt đầu", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Bắt đầu", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                Icon(Icons.Filled.AccessTime, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 String.format("%02d:%02d", config.startHour, config.startMinute),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                             )
+                            Text("Chạm để đổi", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                         }
                     }
 
                     Surface(
                         shape = RoundedCornerShape(10.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { showEndTimePicker = true }
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
-                            Text("Kết thúc", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Kết thúc", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                Icon(Icons.Filled.AccessTime, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 String.format("%02d:%02d", config.endHour, config.endMinute),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                             )
+                            Text("Chạm để đổi", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                         }
                     }
                 }
@@ -492,6 +550,33 @@ fun AutomationConfigEditor(
         // 3. 🔋 Bảo vệ pin khi sạc qua đêm
         AutomationRuleId.OVERNIGHT_CHARGING -> {
             val config = params as? OvernightChargingParams ?: OvernightChargingParams()
+            var showOvernightStartPicker by remember { mutableStateOf(false) }
+            var showOvernightEndPicker by remember { mutableStateOf(false) }
+
+            if (showOvernightStartPicker) {
+                AutomationTimePickerDialog(
+                    title = "Giờ bắt đầu chế độ sạc đêm",
+                    initialHour = config.startHour,
+                    initialMinute = 0,
+                    onDismissRequest = { showOvernightStartPicker = false },
+                    onConfirm = { h, _ ->
+                        onUpdateParams(config.copy(startHour = h))
+                    }
+                )
+            }
+
+            if (showOvernightEndPicker) {
+                AutomationTimePickerDialog(
+                    title = "Giờ kết thúc chế độ sạc đêm",
+                    initialHour = config.endHour,
+                    initialMinute = 0,
+                    onDismissRequest = { showOvernightEndPicker = false },
+                    onConfirm = { h, _ ->
+                        onUpdateParams(config.copy(endHour = h))
+                    }
+                )
+            }
+
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -516,6 +601,65 @@ fun AutomationConfigEditor(
                         activeTrackColor = MaterialTheme.colorScheme.primary
                     )
                 )
+
+                Text(
+                    text = "Khung giờ sạc đêm áp dụng (Chạm để đổi):",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { showOvernightStartPicker = true }
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Bắt đầu", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                Icon(Icons.Filled.AccessTime, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                String.format("%02d:00", config.startHour),
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Text("Chạm để đổi", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { showOvernightEndPicker = true }
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Kết thúc", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                Icon(Icons.Filled.AccessTime, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                String.format("%02d:00", config.endHour),
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Text("Chạm để đổi", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                        }
+                    }
+                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -684,3 +828,63 @@ fun AutomationConfigEditor(
         }
     }
 }
+
+/**
+ * Hộp thoại chọn giờ chuẩn Material 3 trực quan
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AutomationTimePickerDialog(
+    title: String,
+    initialHour: Int,
+    initialMinute: Int,
+    onDismissRequest: () -> Unit,
+    onConfirm: (Int, Int) -> Unit
+) {
+    val state = rememberTimePickerState(
+        initialHour = initialHour,
+        initialMinute = initialMinute,
+        is24Hour = true
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.AccessTime,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+            }
+        },
+        text = {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                TimePicker(state = state)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onConfirm(state.hour, state.minute)
+                onDismissRequest()
+            }) {
+                Text("Xác nhận", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text("Hủy")
+            }
+        }
+    )
+}
+
