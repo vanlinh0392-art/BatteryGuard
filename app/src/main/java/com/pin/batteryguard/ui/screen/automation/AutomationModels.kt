@@ -142,5 +142,6 @@ data class AutomationUiState(
     val isCurrentlyCharging: Boolean = false,
     val isWifiConnected: Boolean = true,
     val availableSims: List<SimInfoItem> = emptyList(),
+    val autoSortActiveToTop: Boolean = true,
     val snackbarMessage: String? = null
 )

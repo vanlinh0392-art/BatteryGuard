@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -134,7 +135,7 @@ fun AutomationScreen(
                 )
             }
 
-            // 2. SECTION TITLE: PRESET MODULES
+            // 2. SECTION TITLE: PRESET MODULES & SORTING CHIP
             item(key = "section_header") {
                 Row(
                     modifier = Modifier
@@ -143,28 +144,65 @@ fun AutomationScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = "MODULES CÓ SẴN (PRESETS)",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
-                        ),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = "${uiState.rules.size} quy tắc",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "MODULES CÓ SẴN",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp
+                            ),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "(${uiState.rules.size})",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    // Chip chuyển đổi chế độ sắp xếp linh hoạt
+                    Surface(
+                        onClick = { viewModel.toggleAutoSortActive() },
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (uiState.autoSortActiveToTop) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        border = BorderStroke(
+                            0.8.dp,
+                            if (uiState.autoSortActiveToTop) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Sort,
+                                contentDescription = null,
+                                modifier = Modifier.size(13.dp),
+                                tint = if (uiState.autoSortActiveToTop) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (uiState.autoSortActiveToTop) "Ưu tiên Đang chạy" else "Thứ tự Gốc",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Medium),
+                                color = if (uiState.autoSortActiveToTop) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             }
 
-            // 4. DANH SÁCH AUTOMATION CARDS
+            // 3. DANH SÁCH AUTOMATION CARDS (CÓ HIỆU ỨNG TRƯỢT SẮP XẾP)
             items(
                 items = uiState.rules,
                 key = { it.id.name }
             ) { rule ->
                 AutomationCard(
+                    modifier = Modifier.animateItem(),
                     rule = rule,
                     isMasterEnabled = uiState.isMasterEnabled,
                     isExpanded = uiState.expandedRuleId == rule.id,

@@ -152,16 +152,31 @@ class AutomationViewModel @Inject constructor(
             )
         )
 
+        val sortedRules = if (config.autoSortActiveToTop) {
+            rules.sortedWith(
+                compareByDescending<AutomationRuleUiModel> { rule ->
+                    when {
+                        !config.isMasterEnabled || !rule.isEnabled -> 0
+                        rule.activeStatus == RuleActiveStatus.ACTIVE -> 2
+                        else -> 1
+                    }
+                }.thenBy { it.id.ordinal }
+            )
+        } else {
+            rules
+        }
+
         val activeCount = rules.count { it.isEnabled && it.activeStatus == RuleActiveStatus.ACTIVE }
         val enabledCount = rules.count { it.isEnabled }
 
         _uiState.update { current ->
             current.copy(
                 isMasterEnabled = config.isMasterEnabled,
-                rules = rules,
+                rules = sortedRules,
                 activeRulesCount = activeCount,
                 enabledRulesCount = enabledCount,
-                isWifiConnected = isWifi
+                isWifiConnected = isWifi,
+                autoSortActiveToTop = config.autoSortActiveToTop
             )
         }
     }
@@ -261,6 +276,23 @@ class AutomationViewModel @Inject constructor(
                 }
             }
             _uiState.update { it.copy(snackbarMessage = "Đã lưu cài đặt mới") }
+        }
+    }
+
+    /**
+     * Bật/Tắt chế độ tự động sắp xếp đẩy module Active lên trên
+     */
+    fun toggleAutoSortActive() {
+        viewModelScope.launch {
+            val nextState = !_uiState.value.autoSortActiveToTop
+            automationDataStore.setAutoSortActiveToTop(nextState)
+            _uiState.update {
+                it.copy(
+                    autoSortActiveToTop = nextState,
+                    snackbarMessage = if (nextState) "Đã bật tự động ưu tiên module đang chạy lên đầu"
+                    else "Đã chuyển về thứ tự hiển thị mặc định"
+                )
+            }
         }
     }
 

@@ -34,7 +34,8 @@ data class AutomationMasterConfig(
     val lowBatterySaverEnabled: Boolean = true,
     val lowBatterySaverParams: LowBatterySaverParams = LowBatterySaverParams(),
     val deepScreenOffEnabled: Boolean = false,
-    val deepScreenOffParams: DeepScreenOffParams = DeepScreenOffParams()
+    val deepScreenOffParams: DeepScreenOffParams = DeepScreenOffParams(),
+    val autoSortActiveToTop: Boolean = true
 )
 
 @Singleton
@@ -43,6 +44,7 @@ class AutomationDataStore @Inject constructor(
 ) {
     companion object {
         private val KEY_MASTER_ENABLED = booleanPreferencesKey("automation_master_enabled")
+        private val KEY_AUTO_SORT_ACTIVE = booleanPreferencesKey("auto_sort_active_to_top")
 
         // 1. Wifi Auto Data
         private val KEY_WIFI_DATA_ENABLED = booleanPreferencesKey("wifi_data_enabled")
@@ -139,12 +141,17 @@ class AutomationDataStore @Inject constructor(
                 forceStopBackgroundDrainers = prefs[KEY_SCREEN_OFF_FORCE_STOP] ?: true,
                 enableDeepDoze = prefs[KEY_SCREEN_OFF_DEEP_DOZE] ?: true,
                 turnOffHotspotIfIdle = prefs[KEY_SCREEN_OFF_HOTSPOT] ?: true
-            )
+            ),
+            autoSortActiveToTop = prefs[KEY_AUTO_SORT_ACTIVE] ?: true
         )
     }
 
     suspend fun setMasterEnabled(enabled: Boolean) {
         context.automationDataStore.edit { it[KEY_MASTER_ENABLED] = enabled }
+    }
+
+    suspend fun setAutoSortActiveToTop(enabled: Boolean) {
+        context.automationDataStore.edit { it[KEY_AUTO_SORT_ACTIVE] = enabled }
     }
 
     suspend fun setRuleEnabled(ruleId: com.pin.batteryguard.ui.screen.automation.AutomationRuleId, enabled: Boolean) {
