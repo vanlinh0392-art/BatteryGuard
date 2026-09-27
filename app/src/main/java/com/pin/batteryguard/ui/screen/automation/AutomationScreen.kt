@@ -3,6 +3,7 @@ package com.pin.batteryguard.ui.screen.automation
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -119,34 +120,26 @@ fun AutomationScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // 1. MASTER TOGGLE HERO CARD
+            // 1. COMPACT MASTER CONTROL STRIP
             item(key = "master_header") {
-                MasterAutomationHeroCard(
+                CompactMasterControlCard(
                     isMasterEnabled = uiState.isMasterEnabled,
                     activeCount = uiState.activeRulesCount,
                     totalCount = uiState.rules.size,
+                    estimatedSavings = uiState.estimatedBatterySavingsPercent,
+                    isShizukuReady = uiState.isShizukuReady,
                     onToggleMaster = { viewModel.toggleMaster(it) }
                 )
             }
 
-            // 2. QUICK STATS ROW
-            item(key = "quick_stats") {
-                AutomationStatsRow(
-                    activeCount = uiState.activeRulesCount,
-                    enabledCount = uiState.enabledRulesCount,
-                    estimatedSavings = uiState.estimatedBatterySavingsPercent,
-                    isShizukuReady = uiState.isShizukuReady
-                )
-            }
-
-            // 3. SECTION TITLE: PRESET MODULES
+            // 2. SECTION TITLE: PRESET MODULES
             item(key = "section_header") {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp, bottom = 4.dp),
+                        .padding(top = 4.dp, bottom = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -220,197 +213,138 @@ fun AutomationScreen(
 }
 
 /**
- * Hero Card chứa Master Toggle lớn và chỉ số tổng quát
+ * Thanh điều khiển tổng siêu gọn (Compact Master Control Strip)
+ * Tích hợp toàn bộ Master Switch, trạng thái số rule đang chạy, % tiết kiệm và Shizuku readiness vào 1 hàng duy nhất ~64dp
  */
 @Composable
-fun MasterAutomationHeroCard(
+fun CompactMasterControlCard(
     isMasterEnabled: Boolean,
     activeCount: Int,
     totalCount: Int,
+    estimatedSavings: Int,
+    isShizukuReady: Boolean,
     onToggleMaster: (Boolean) -> Unit
 ) {
     val gradientColors = if (isMasterEnabled) {
         listOf(
-            Green40.copy(alpha = 0.35f),
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+            Green40.copy(alpha = 0.22f),
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
         )
     } else {
         listOf(
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
         )
     }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            .clip(RoundedCornerShape(18.dp)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        border = BorderStroke(
+            1.dp,
+            if (isMasterEnabled) Green80.copy(alpha = 0.35f)
+            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isMasterEnabled) 1.5.dp else 0.dp)
     ) {
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Brush.horizontalGradient(gradientColors))
-                .padding(20.dp)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Icon lớn với viền sáng
-                Box(
-                    modifier = Modifier
-                        .size(54.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isMasterEnabled) Green80.copy(alpha = 0.2f)
-                            else MaterialTheme.colorScheme.surfaceContainerHighest
-                        )
-                        .border(
-                            1.5.dp,
-                            if (isMasterEnabled) Green80.copy(alpha = 0.6f)
-                            else MaterialTheme.colorScheme.outlineVariant,
-                            CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Bolt,
-                        contentDescription = null,
-                        modifier = Modifier.size(32.dp),
-                        tint = if (isMasterEnabled) Green80 else MaterialTheme.colorScheme.onSurfaceVariant
+            // Icon Bolt nhỏ gọn với viền phát sáng
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (isMasterEnabled) Green80.copy(alpha = 0.2f)
+                        else MaterialTheme.colorScheme.surfaceContainerHighest
                     )
-                }
+                    .border(
+                        1.dp,
+                        if (isMasterEnabled) Green80.copy(alpha = 0.5f)
+                        else MaterialTheme.colorScheme.outlineVariant,
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Bolt,
+                    contentDescription = null,
+                    modifier = Modifier.size(22.dp),
+                    tint = if (isMasterEnabled) Green80 else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
-                Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
-                // Thông tin trạng thái tổng
-                Column(modifier = Modifier.weight(1f)) {
+            // Thông tin trung tâm: Tiêu đề + Capsule đang chạy + Dòng phụ
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = "Tự động hóa tổng",
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
+                            fontSize = 15.sp
                         ),
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = if (isMasterEnabled) {
-                            "Đang hoạt động • $activeCount/$totalCount module sẵn sàng"
-                        } else {
-                            "Tất cả quy tắc tự động đang tạm dừng"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isMasterEnabled) Green80 else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (isMasterEnabled) Green80.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceContainerHighest
+                    ) {
+                        Text(
+                            text = if (isMasterEnabled) "$activeCount/$totalCount đang chạy" else "Đã tắt",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
+                            color = if (isMasterEnabled) Green80 else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.height(2.dp))
 
-                // Master Switch
-                Switch(
-                    checked = isMasterEnabled,
-                    onCheckedChange = onToggleMaster,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                        checkedTrackColor = MaterialTheme.colorScheme.primary
+                // Dòng phụ: Tiết kiệm pin & Trạng thái Shizuku
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Tiết kiệm ~$estimatedSavings% • ",
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                )
+                    Box(
+                        modifier = Modifier
+                            .size(5.dp)
+                            .clip(CircleShape)
+                            .background(if (isShizukuReady) BatteryFull else BatteryLow)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (isShizukuReady) "Shizuku Sẵn sàng" else "Cần Shizuku",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (isShizukuReady) Green80 else BatteryLow
+                        )
+                    )
+                }
             }
-        }
-    }
-}
 
-/**
- * Hàng các thẻ thống kê nhanh: Số rule hoạt động, % tiết kiệm, quyền Shizuku
- */
-@Composable
-fun AutomationStatsRow(
-    activeCount: Int,
-    enabledCount: Int,
-    estimatedSavings: Int,
-    isShizukuReady: Boolean
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        // Thẻ 1: Quy tắc đang kích hoạt
-        StatMiniCard(
-            modifier = Modifier.weight(1f),
-            label = "Đang chạy",
-            value = "$activeCount quy tắc",
-            subLabel = "$enabledCount đã bật",
-            indicatorColor = if (activeCount > 0) BatteryFull else MaterialTheme.colorScheme.outline
-        )
+            Spacer(modifier = Modifier.width(8.dp))
 
-        // Thẻ 2: Ước tính tiết kiệm
-        StatMiniCard(
-            modifier = Modifier.weight(1f),
-            label = "Ước tính tiết kiệm",
-            value = "~$estimatedSavings%",
-            subLabel = "Pin tiêu thụ/ngày",
-            indicatorColor = Teal80
-        )
-
-        // Thẻ 3: Shizuku Bridge
-        StatMiniCard(
-            modifier = Modifier.weight(1f),
-            label = "Quyền hệ thống",
-            value = if (isShizukuReady) "Sẵn sàng" else "Chưa cấp",
-            subLabel = if (isShizukuReady) "Shizuku ADB" else "Cần Shizuku",
-            indicatorColor = if (isShizukuReady) BatteryFull else BatteryLow
-        )
-    }
-}
-
-@Composable
-fun StatMiniCard(
-    label: String,
-    value: String,
-    subLabel: String,
-    indicatorColor: Color,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        modifier = modifier
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(indicatorColor)
+            // Master Switch
+            Switch(
+                checked = isMasterEnabled,
+                onCheckedChange = onToggleMaster,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                    checkedTrackColor = MaterialTheme.colorScheme.primary
                 )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
-                )
-            }
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 14.sp),
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1
-            )
-            Text(
-                text = subLabel,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                maxLines = 1
             )
         }
     }

@@ -111,76 +111,132 @@ fun AutomationCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp)),
+            .clip(RoundedCornerShape(18.dp)),
         colors = CardDefaults.cardColors(containerColor = containerColor),
-        border = BorderStroke(1.2.dp, borderColor),
+        border = BorderStroke(1.dp, borderColor),
         elevation = CardDefaults.cardElevation(defaultElevation = if (isActive) 2.dp else 0.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
-            // Hàng chính: Icon + Thông tin + Switch On/Off nhanh
+            // Hàng chính siêu gọn: Icon + Thông tin (Title & Status) + Action (Tune + Switch)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Icon tròn nổi bật kiểu Smart Device
-                Box(
+                // Vùng chạm mở rộng: Chạm vào Icon hoặc Tiêu đề để mở/đóng cấu hình
+                Row(
                     modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(
-                            if (isEffectivelyEnabled) {
-                                MaterialTheme.colorScheme.primaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f)
-                            }
-                        ),
-                    contentAlignment = Alignment.Center
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onToggleExpand() }
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Icon bo góc nhỏ gọn 40dp
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (isActive) Green80.copy(alpha = 0.2f)
+                                else if (isEffectivelyEnabled) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = rule.icon,
+                            contentDescription = rule.title,
+                            tint = if (isActive) Green80
+                            else if (isEffectivelyEnabled) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    // Tiêu đề & Dòng trạng thái tóm tắt (1 dòng súc tích)
+                    Column(
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = rule.title,
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 15.sp
+                                ),
+                                color = if (isMasterEnabled) {
+                                    MaterialTheme.colorScheme.onSurface
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                },
+                                maxLines = 1,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+
+                            Spacer(modifier = Modifier.width(6.dp))
+
+                            // Mini Status Dot báo trạng thái tức thì
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        when {
+                                            !isMasterEnabled || !rule.isEnabled -> Color.Gray.copy(alpha = 0.4f)
+                                            rule.activeStatus == RuleActiveStatus.ACTIVE -> Green80
+                                            else -> Teal80
+                                        }
+                                    )
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(2.dp))
+
+                        // Dòng trạng thái/mô tả tóm tắt 1 dòng duy nhất
+                        val summaryText = when {
+                            !isMasterEnabled -> "Tạm dừng (Master Off)"
+                            !rule.isEnabled -> rule.subtitle
+                            rule.statusDetail.isNotBlank() && rule.statusDetail != "Đã tắt" -> rule.statusDetail
+                            else -> "${rule.statusBadgeText} • ${rule.subtitle}"
+                        }
+
+                        Text(
+                            text = summaryText,
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                            color = if (isActive) Green80.copy(alpha = 0.9f)
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                            maxLines = 1
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(4.dp))
+
+                // Nút icon Cấu hình / Thu gọn
+                IconButton(
+                    onClick = { onToggleExpand() },
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
-                        imageVector = rule.icon,
-                        contentDescription = rule.title,
-                        tint = if (isEffectivelyEnabled) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                        },
-                        modifier = Modifier.size(26.dp)
+                        imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.Tune,
+                        contentDescription = if (isExpanded) "Thu gọn" else "Cấu hình",
+                        tint = if (isExpanded) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.size(19.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.width(14.dp))
+                Spacer(modifier = Modifier.width(2.dp))
 
-                // Tên module & mô tả ngắn
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = rule.title,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 16.sp
-                        ),
-                        color = if (isMasterEnabled) {
-                            MaterialTheme.colorScheme.onSurface
-                        } else {
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        }
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = rule.subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Switch kích hoạt nhanh (1 chạm là bật/tắt ngay)
+                // Switch kích hoạt nhanh
                 Switch(
                     checked = rule.isEnabled,
                     onCheckedChange = { onToggle(it) },
@@ -189,60 +245,6 @@ fun AutomationCard(
                         checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
                         checkedTrackColor = MaterialTheme.colorScheme.primary
                     )
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Hàng trạng thái & nút cấu hình chi tiết
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable { onToggleExpand() }
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Badge trạng thái Đang chạy / Chờ / Tắt
-                AutomationStatusBadge(
-                    status = if (!isMasterEnabled) RuleActiveStatus.DISABLED else rule.activeStatus,
-                    statusText = if (!isMasterEnabled) "Tạm dừng (Master Off)" else rule.statusBadgeText
-                )
-
-                // Nút mở cấu hình thông số
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Tune,
-                        contentDescription = "Cấu hình",
-                        modifier = Modifier.size(15.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = if (isExpanded) "Thu gọn" else "Cấu hình",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Icon(
-                        imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-
-            // Chi tiết trạng thái kích hoạt hiện thời
-            if (rule.statusDetail.isNotBlank() && isEffectivelyEnabled) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "• ${rule.statusDetail}",
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(start = 2.dp)
                 )
             }
 
@@ -255,13 +257,13 @@ fun AutomationCard(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 12.dp)
+                        .padding(top = 10.dp)
                 ) {
                     HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                        thickness = 1.dp
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                        thickness = 0.8.dp
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     AutomationConfigEditor(
                         ruleId = rule.id,
