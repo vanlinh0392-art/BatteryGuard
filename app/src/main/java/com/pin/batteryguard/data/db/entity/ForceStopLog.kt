@@ -1,9 +1,15 @@
 package com.pin.batteryguard.data.db.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "force_stop_logs")
+@Entity(
+    tableName = "force_stop_logs",
+    indices = [
+        Index(value = ["packageName", "userId", "verified", "timestamp"])
+    ]
+)
 data class ForceStopLog(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val packageName: String,

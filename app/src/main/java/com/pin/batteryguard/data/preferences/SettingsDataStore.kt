@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.pin.batteryguard.domain.model.MonitoringConfig
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -71,9 +72,9 @@ class SettingsDataStore(private val context: Context) {
             enableAutoStartShizuku = preferences[KEY_AUTO_START_SHIZUKU] ?: true,
             shizukuRetryMinutes = (preferences[KEY_SHIZUKU_RETRY_MINUTES] ?: 15).coerceIn(10, 60)
         ).normalized()
-    }
+    }.distinctUntilChanged()
 
-    val isSetupCompletedFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_SETUP_COMPLETED] ?: false }
+    val isSetupCompletedFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_SETUP_COMPLETED] ?: false }.distinctUntilChanged()
 
     suspend fun migrateIfNeeded() {
         context.dataStore.edit { preferences ->
@@ -136,7 +137,7 @@ class SettingsDataStore(private val context: Context) {
             relaunchApp = preferences[KEY_SHIELD_RELAUNCH_APP] ?: true,
             autoRestartShizuku = preferences[KEY_SHIELD_AUTO_RESTART_SHIZUKU] ?: true
         )
-    }
+    }.distinctUntilChanged()
 
     suspend fun updateShieldConfig(config: com.pin.batteryguard.domain.model.AppShieldConfig) {
         context.dataStore.edit { preferences ->

@@ -11,14 +11,25 @@ import javax.inject.Singleton
 class ForceStopManager @Inject constructor(
     private val shizukuManager: ShizukuManager
 ) {
+    // ── C5: Frozen-packages cache with 30s TTL ──────────────────────────
+    @Volatile private var cachedFrozenPackages: Set<String> = emptySet()
+    @Volatile private var frozenCacheUserId: Int = -1
+    @Volatile private var frozenCacheTime: Long = 0L
+    private val FROZEN_CACHE_TTL = 30_000L // 30 seconds
+
+    fun invalidateFrozenCache() {
+        frozenCacheTime = 0L
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     suspend fun forceStopPackage(packageName: String, userId: Int = 0): Result<ActionResult> =
         resultOf(forceStopDetailed(packageName, userId))
 
     suspend fun freezePackage(packageName: String, userId: Int = 0): Result<ActionResult> =
-        resultOf(freezeDetailed(packageName, userId))
+        resultOf(freezeDetailed(packageName, userId)).also { invalidateFrozenCache() }
 
     suspend fun unfreezePackage(packageName: String, userId: Int = 0): Result<ActionResult> =
-        resultOf(unfreezeDetailed(packageName, userId))
+        resultOf(unfreezeDetailed(packageName, userId)).also { invalidateFrozenCache() }
 
     suspend fun forceStopDetailed(packageName: String, userId: Int): ActionResult = withContext(Dispatchers.IO) {
         if (!shizukuManager.ensureReady()) return@withContext unavailable("force-stop", packageName, userId)
@@ -54,24 +65,36 @@ class ForceStopManager @Inject constructor(
     }
 
     /** Read disabled packages once per profile instead of spawning one shell
-     * process for every row in the Applications screen. */
+     * process for every row in the Applications screen.
+     * C5: Results are cached for [FROZEN_CACHE_TTL] ms to avoid repeated shell calls. */
     suspend fun listFrozenPackages(userId: Int = 0): Set<String> = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        if (userId == frozenCacheUserId && (now - frozenCacheTime) < FROZEN_CACHE_TTL) {
+            return@withContext cachedFrozenPackages
+        }
         if (!shizukuManager.ensureReady()) return@withContext emptySet()
         val result = execute("pm", "list", "packages", "-d", "--user", userId.toString())
         if (!result.commandSucceeded) return@withContext emptySet()
-        result.stdout.lineSequence()
+        val packages = result.stdout.lineSequence()
             .map { it.trim() }
             .filter { it.startsWith("package:") }
             .map { it.removePrefix("package:") }
             .filter { it.isNotBlank() }
             .toSet()
+        cachedFrozenPackages = packages
+        frozenCacheUserId = userId
+        frozenCacheTime = now
+        packages
     }
 
     suspend fun batchForceStop(packages: List<String>, userId: Int = 0): Map<String, Boolean> =
         packages.associateWith { forceStopDetailed(it, userId).isSuccess }
 
     suspend fun batchFreeze(packages: List<String>, userId: Int = 0): Map<String, Boolean> =
-        packages.associateWith { freezeDetailed(it, userId).isSuccess }
+        packages.associateWith { freezeDetailed(it, userId).isSuccess }.also { invalidateFrozenCache() }
+
+    suspend fun batchUnfreeze(packages: List<String>, userId: Int = 0): Map<String, Boolean> =
+        packages.associateWith { unfreezeDetailed(it, userId).isSuccess }.also { invalidateFrozenCache() }
 
     private suspend fun resultOf(action: ActionResult): Result<ActionResult> =
         if (action.isSuccess) Result.success(action) else Result.failure(ActionFailedException(action))

@@ -1,9 +1,15 @@
 package com.pin.batteryguard.data.db.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "battery_logs")
+@Entity(
+    tableName = "battery_logs",
+    indices = [
+        Index(value = ["timestamp"])
+    ]
+)
 data class BatteryLog(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val level: Int,                    // 0-100%

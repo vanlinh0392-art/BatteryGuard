@@ -31,7 +31,7 @@ import com.pin.batteryguard.data.db.entity.UidBaseline
         com.pin.batteryguard.data.db.entity.AppShieldSnapshotEntity::class,
         com.pin.batteryguard.data.db.entity.ShieldedAppEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -57,7 +57,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     DATABASE_NAME
-                ).addMigrations(MIGRATION_2_3, MIGRATION_3_4).build()
+                ).addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build()
                 INSTANCE = instance
                 instance
             }
@@ -117,6 +117,19 @@ abstract class AppDatabase : RoomDatabase() {
                         addedAt INTEGER NOT NULL
                     )
                 """.trimIndent())
+            }
+        }
+
+        val MIGRATION_4_5 = object : androidx.room.migration.Migration(4, 5) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                // AppUsageLog indices
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_app_usage_logs_timestamp ON app_usage_logs (timestamp)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_app_usage_logs_periodEnd ON app_usage_logs (periodEnd)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_app_usage_logs_packageName_timestamp ON app_usage_logs (packageName, timestamp)")
+                // ForceStopLog indices
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_force_stop_logs_packageName_userId_verified_timestamp ON force_stop_logs (packageName, userId, verified, timestamp)")
+                // BatteryLog indices
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_battery_logs_timestamp ON battery_logs (timestamp)")
             }
         }
     }

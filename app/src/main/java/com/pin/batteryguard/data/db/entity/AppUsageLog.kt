@@ -1,9 +1,17 @@
 package com.pin.batteryguard.data.db.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "app_usage_logs")
+@Entity(
+    tableName = "app_usage_logs",
+    indices = [
+        Index(value = ["timestamp"]),
+        Index(value = ["periodEnd"]),
+        Index(value = ["packageName", "timestamp"])
+    ]
+)
 data class AppUsageLog(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val packageName: String,

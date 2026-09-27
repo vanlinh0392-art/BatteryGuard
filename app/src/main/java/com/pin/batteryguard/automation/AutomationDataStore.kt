@@ -17,6 +17,7 @@ import com.pin.batteryguard.ui.screen.automation.TargetSimSelection
 import com.pin.batteryguard.ui.screen.automation.WifiAutoDataParams
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -146,7 +147,7 @@ class AutomationDataStore @Inject constructor(
             ),
             autoSortActiveToTop = prefs[KEY_AUTO_SORT_ACTIVE] ?: true
         )
-    }
+    }.distinctUntilChanged()
 
     suspend fun setMasterEnabled(enabled: Boolean) {
         context.automationDataStore.edit { it[KEY_MASTER_ENABLED] = enabled }

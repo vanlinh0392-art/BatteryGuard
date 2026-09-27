@@ -9,6 +9,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -50,11 +51,11 @@ class AppShieldAccessibilityService : AccessibilityService() {
         if (packageName == lastHandledPackage && (now - lastHandledTime < DEBOUNCE_MS)) {
             return
         }
+        lastHandledPackage = packageName   // C3: LUÔN cập nhật để debounce chặn 99% app thường
+        lastHandledTime = now               // C3: LUÔN cập nhật
 
         // Kiểm tra kết hợp: Ứng dụng người dùng CHỌN THÊM hoặc TỰ ĐỘNG PHÁT HIỆN Ngân hàng/Ví điện tử
         if (appShieldManager.shouldShieldApp(packageName)) {
-            lastHandledPackage = packageName
-            lastHandledTime = now
             scope.launch {
                 try {
                     appShieldManager.hideSettingsForApp(packageName)
@@ -70,6 +71,7 @@ class AppShieldAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        scope.cancel() // H12: Dọn sạch coroutine scope tránh leak
         isRunning = false
         Log.i(TAG, "AppShieldAccessibilityService đã bị hủy.")
         super.onDestroy()

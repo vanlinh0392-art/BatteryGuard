@@ -66,12 +66,61 @@ class BatteryStatsSnapshotParser {
     private fun emptySnapshot(wall: Long, elapsed: Long, chargeCounterUah: Long?, capacity: Double = 0.0) =
         BatteryStatsSnapshot(wall, elapsed, "", capacity, chargeCounterUah, emptyMap())
 
-    private fun metric(line: String, name: String): Double =
-        Regex("(?:^|\\s)${Regex.escape(name)}=([0-9]+(?:\\.[0-9]+)?)").find(line)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+    /**
+     * Extract metric value using String.indexOf instead of dynamic Regex construction.
+     * Avoids creating a new Regex object on every call (was called 5× per UID line).
+     */
+    private fun metric(line: String, name: String): Double {
+        val needle = "$name="
+        var idx = line.indexOf(needle)
+        while (idx >= 0) {
+            // Ensure it's at start of line or preceded by whitespace
+            if (idx == 0 || line[idx - 1].isWhitespace()) {
+                val valueStart = idx + needle.length
+                val valueEnd = findNumberEnd(line, valueStart)
+                if (valueEnd > valueStart) {
+                    return line.substring(valueStart, valueEnd).toDoubleOrNull() ?: 0.0
+                }
+            }
+            idx = line.indexOf(needle, idx + 1)
+        }
+        return 0.0
+    }
 
+    /**
+     * Extract duration for a state (fg, bg, fgs) using String.indexOf instead of dynamic Regex.
+     */
     private fun durationForState(suffix: String, state: String): Long {
-        val match = Regex("(?:^|\\s)${Regex.escape(state)}:\\s*[0-9.]+(?:\\s*\\(([^)]*)\\))?").find(suffix) ?: return 0L
-        return parseDuration(match.groupValues.getOrElse(1) { "" })
+        val needle = "$state:"
+        var idx = suffix.indexOf(needle)
+        while (idx >= 0) {
+            if (idx == 0 || suffix[idx - 1].isWhitespace()) {
+                // Find the parenthesized duration part: "fg: 1.23 (1h 2m 3s)"
+                val afterColon = idx + needle.length
+                val parenOpen = suffix.indexOf('(', afterColon)
+                if (parenOpen >= 0) {
+                    val parenClose = suffix.indexOf(')', parenOpen)
+                    if (parenClose > parenOpen) {
+                        return parseDuration(suffix.substring(parenOpen + 1, parenClose))
+                    }
+                }
+                return 0L
+            }
+            idx = suffix.indexOf(needle, idx + 1)
+        }
+        return 0L
+    }
+
+    private fun findNumberEnd(s: String, start: Int): Int {
+        var i = start
+        var hasDot = false
+        while (i < s.length) {
+            val c = s[i]
+            if (c in '0'..'9') { i++; continue }
+            if (c == '.' && !hasDot) { hasDot = true; i++; continue }
+            break
+        }
+        return i
     }
 
     private fun parseDuration(value: String): Long = durationPattern.findAll(value).sumOf {
@@ -87,7 +136,7 @@ class BatteryStatsSnapshotParser {
 
     internal fun parseUid(raw: String): Int? {
         raw.toIntOrNull()?.let { return it }
-        val match = Regex("u(\\d+)_?a(\\d+)", RegexOption.IGNORE_CASE).matchEntire(raw)
+        val match = UID_REGEX.matchEntire(raw)
         if (match != null) {
             val userId = match.groupValues[1].toIntOrNull() ?: return null
             val appId = match.groupValues[2].toIntOrNull() ?: return null
@@ -105,6 +154,7 @@ class BatteryStatsSnapshotParser {
     companion object {
         const val PER_USER_RANGE = 100_000
         const val FIRST_APPLICATION_UID = 10_000
+        private val UID_REGEX = Regex("u(\\d+)_?a(\\d+)", RegexOption.IGNORE_CASE)
         fun userIdFromUid(uid: Int): Int = uid / PER_USER_RANGE
     }
 }

@@ -127,9 +127,14 @@ class DashboardViewModel @Inject constructor(
             isCharging = isCharging,
             chargeType = chargeType
         )
-        if (_batteryState.value != newState) {
-            _batteryState.value = newState
-        }
+        // C7: Only emit when meaningful fields change — currentNow/voltage
+        // fluctuate every second and would cause cascade Flow recompositions.
+        val old = _batteryState.value
+        if (old.level == newState.level &&
+            old.isCharging == newState.isCharging &&
+            old.temperature == newState.temperature
+        ) return
+        _batteryState.value = newState
     }
 
     private fun loadBatteryState() {

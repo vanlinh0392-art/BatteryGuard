@@ -13,6 +13,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.pin.batteryguard.R
@@ -76,6 +77,12 @@ class AutomationCoordinator @Inject constructor(
     private var hasNotifiedOvernightCharging = false
     private var lastScreenOffTime = 0L
 
+    // C2: Guard flag chống coroutine flooding khi pin yếu
+    @Volatile private var isPowerSaverApplied = false
+
+    // H8: Cooldown toggle 4G chống Wi-Fi chập chờn
+    @Volatile private var lastMobileDataToggleTime = 0L
+
     companion object {
         const val ACTION_RINGER_SCHEDULE_TRIGGER = "com.pin.batteryguard.automation.RINGER_TRIGGER"
         private const val RINGER_ALARM_REQUEST_CODE = 992
@@ -105,10 +112,33 @@ class AutomationCoordinator @Inject constructor(
         Log.i(TAG, "🛑 Dừng AutomationCoordinator")
         unregisterNetworkCallback()
         unregisterRingerAlarmReceiver()
+        cancelRingerAlarm() // H7: Cancel zombie alarms
         wifiDataDisableJob?.cancel()
         wifiDataRestoreJob?.cancel()
         screenOffDozeJob?.cancel()
+        isPowerSaverApplied = false
         this.scope = null
+    }
+
+    /** H7: Cancel pending ringer alarm intent để tránh zombie alarm */
+    private fun cancelRingerAlarm() {
+        try {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val intent = Intent(ACTION_RINGER_SCHEDULE_TRIGGER)
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                RINGER_ALARM_REQUEST_CODE,
+                intent,
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+            )
+            pendingIntent?.let {
+                alarmManager.cancel(it)
+                it.cancel()
+                Log.d(TAG, "⏰ Đã hủy ringer alarm pending intent")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Không thể hủy ringer alarm: ${e.message}")
+        }
     }
 
     private fun updateRuleState(ruleId: AutomationRuleId, status: RuleActiveStatus, badge: String, detail: String = "") {
@@ -144,6 +174,7 @@ class AutomationCoordinator @Inject constructor(
             evaluateRingerSchedule()
             scheduleNextRingerAlarm()
         } else {
+            cancelRingerAlarm() // H7: Hủy zombie alarm khi tắt tính năng
             updateRuleState(AutomationRuleId.DAY_NIGHT_RINGER, RuleActiveStatus.DISABLED, "Đã tắt")
         }
 
@@ -358,6 +389,7 @@ class AutomationCoordinator @Inject constructor(
             set(Calendar.HOUR_OF_DAY, p.startHour)
             set(Calendar.MINUTE, p.startMinute)
             set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
             if (before(now)) add(Calendar.DAY_OF_YEAR, 1)
         }
 
@@ -365,6 +397,7 @@ class AutomationCoordinator @Inject constructor(
             set(Calendar.HOUR_OF_DAY, p.endHour)
             set(Calendar.MINUTE, p.endMinute)
             set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
             if (before(now)) add(Calendar.DAY_OF_YEAR, 1)
         }
 
@@ -448,12 +481,15 @@ class AutomationCoordinator @Inject constructor(
             val saverParams = currentConfig.lowBatterySaverParams
             val threshold = saverParams.thresholdPercent
             if (!charging && level <= threshold) {
-                scope?.launch(Dispatchers.IO) {
-                    if (saverParams.enableSystemPowerSaver) {
-                        SystemActionBridge.setPowerSaveMode(context, enable = true)
-                    }
-                    if (saverParams.dimDisplayBrightness) {
-                        SystemActionBridge.setDisplayRefreshRate60Hz(context)
+                if (!isPowerSaverApplied) {
+                    isPowerSaverApplied = true
+                    scope?.launch(Dispatchers.IO) {
+                        if (saverParams.enableSystemPowerSaver) {
+                            SystemActionBridge.setPowerSaveMode(context, enable = true)
+                        }
+                        if (saverParams.dimDisplayBrightness) {
+                            SystemActionBridge.setDisplayRefreshRate60Hz(context)
+                        }
                     }
                 }
                 updateRuleState(
@@ -462,16 +498,21 @@ class AutomationCoordinator @Inject constructor(
                     "Đã kích hoạt Tiết kiệm pin (${level}%)",
                     "Tự động bật Tiết kiệm pin & hạ màn hình 60Hz"
                 )
-            } else if (charging && chargingStateChanged) {
-                scope?.launch(Dispatchers.IO) {
-                    SystemActionBridge.setPowerSaveMode(context, enable = false)
+            } else if (charging || level > threshold) {
+                if (isPowerSaverApplied) {
+                    isPowerSaverApplied = false
+                    scope?.launch(Dispatchers.IO) {
+                        SystemActionBridge.setPowerSaveMode(context, enable = false)
+                    }
                 }
-                updateRuleState(
-                    AutomationRuleId.LOW_BATTERY_SAVER,
-                    RuleActiveStatus.IDLE,
-                    "Bình thường (Đang sạc)",
-                    "Ngưỡng kích hoạt: ≤ $threshold%"
-                )
+                if (charging && chargingStateChanged) {
+                    updateRuleState(
+                        AutomationRuleId.LOW_BATTERY_SAVER,
+                        RuleActiveStatus.IDLE,
+                        "Bình thường (Đang sạc)",
+                        "Ngưỡng kích hoạt: ≤ $threshold%"
+                    )
+                }
             }
         }
     }
