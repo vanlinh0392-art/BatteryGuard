@@ -61,7 +61,8 @@ sealed interface AutomationConfigParams
  * 1. Tham số Tự động tắt 4G khi có Wi-Fi
  */
 data class WifiAutoDataParams(
-    val delaySeconds: Int = 15,
+    val delaySeconds: Int = 5,
+    val restoreDelaySeconds: Int = 3,
     val autoRestoreDataOnDisconnect: Boolean = true,
     val targetSim: TargetSimSelection = TargetSimSelection.AUTO,
     val targetSubId: Int = -1, // -1 = Auto

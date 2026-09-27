@@ -49,6 +49,7 @@ class AutomationDataStore @Inject constructor(
         // 1. Wifi Auto Data
         private val KEY_WIFI_DATA_ENABLED = booleanPreferencesKey("wifi_data_enabled")
         private val KEY_WIFI_DATA_DELAY = intPreferencesKey("wifi_data_delay")
+        private val KEY_WIFI_DATA_RESTORE_DELAY = intPreferencesKey("wifi_data_restore_delay")
         private val KEY_WIFI_DATA_RESTORE = booleanPreferencesKey("wifi_data_restore")
         private val KEY_WIFI_DATA_SIM = stringPreferencesKey("wifi_data_sim")
 
@@ -106,7 +107,8 @@ class AutomationDataStore @Inject constructor(
             isMasterEnabled = prefs[KEY_MASTER_ENABLED] ?: true,
             wifiAutoDataEnabled = prefs[KEY_WIFI_DATA_ENABLED] ?: true,
             wifiAutoDataParams = WifiAutoDataParams(
-                delaySeconds = prefs[KEY_WIFI_DATA_DELAY] ?: 15,
+                delaySeconds = (prefs[KEY_WIFI_DATA_DELAY] ?: 5).coerceIn(0, 15),
+                restoreDelaySeconds = (prefs[KEY_WIFI_DATA_RESTORE_DELAY] ?: 3).coerceIn(0, 15),
                 autoRestoreDataOnDisconnect = prefs[KEY_WIFI_DATA_RESTORE] ?: true,
                 targetSim = simSelection
             ),
@@ -173,7 +175,8 @@ class AutomationDataStore @Inject constructor(
 
     suspend fun updateWifiAutoDataParams(params: WifiAutoDataParams) {
         context.automationDataStore.edit { prefs ->
-            prefs[KEY_WIFI_DATA_DELAY] = params.delaySeconds
+            prefs[KEY_WIFI_DATA_DELAY] = params.delaySeconds.coerceIn(0, 15)
+            prefs[KEY_WIFI_DATA_RESTORE_DELAY] = params.restoreDelaySeconds.coerceIn(0, 15)
             prefs[KEY_WIFI_DATA_RESTORE] = params.autoRestoreDataOnDisconnect
             prefs[KEY_WIFI_DATA_SIM] = params.targetSim.name
         }

@@ -209,18 +209,21 @@ class AutomationCoordinator @Inject constructor(
         if (!currentConfig.isMasterEnabled || !currentConfig.wifiAutoDataEnabled) return
 
         val params = currentConfig.wifiAutoDataParams
-        val delaySec = params.delaySeconds
+        val delaySec = params.delaySeconds.coerceIn(0, 15)
 
+        val badgeText = if (delaySec == 0) "Tắt 4G tức thì" else "Chờ ${delaySec}s để tắt 4G"
         updateRuleState(
             AutomationRuleId.WIFI_AUTO_DATA,
             RuleActiveStatus.IDLE,
-            "Chờ ${delaySec}s để tắt 4G",
-            "Đã kết nối Wi-Fi. Đang chờ đường truyền ổn định."
+            badgeText,
+            "Đã kết nối Wi-Fi. Đang chờ ngắt dữ liệu di động."
         )
 
         wifiDataDisableJob?.cancel()
         wifiDataDisableJob = scope?.launch(Dispatchers.IO) {
-            delay(delaySec * 1000L)
+            if (delaySec > 0) {
+                delay(delaySec * 1000L)
+            }
             if (_isWifiConnected.value) {
                 executeMobileDataToggle(enable = false, targetSim = params.targetSim)
                 updateRuleState(
@@ -240,17 +243,20 @@ class AutomationCoordinator @Inject constructor(
         val params = currentConfig.wifiAutoDataParams
         if (!params.autoRestoreDataOnDisconnect) return
 
-        // DEBOUNCE 20 GIÂY CHỐNG FLAPPING
+        val restoreSec = params.restoreDelaySeconds.coerceIn(0, 15)
+        val badgeText = if (restoreSec == 0) "Bật lại 4G tức thì" else "Chờ ${restoreSec}s bật lại 4G"
         updateRuleState(
             AutomationRuleId.WIFI_AUTO_DATA,
             RuleActiveStatus.IDLE,
-            "Chờ 20s bật lại 4G",
-            "Mất Wi-Fi. Chống rung lắc mạng trước khi bật 4G."
+            badgeText,
+            "Mất Wi-Fi. Đang chuẩn bị khôi phục dữ liệu di động."
         )
 
         wifiDataRestoreJob?.cancel()
         wifiDataRestoreJob = scope?.launch(Dispatchers.IO) {
-            delay(20000L) // 20s debounce
+            if (restoreSec > 0) {
+                delay(restoreSec * 1000L)
+            }
             if (!_isWifiConnected.value) {
                 executeMobileDataToggle(enable = true, targetSim = params.targetSim)
                 updateRuleState(

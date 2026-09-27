@@ -354,18 +354,42 @@ fun AutomationConfigEditor(
         AutomationRuleId.WIFI_AUTO_DATA -> {
             val config = params as? WifiAutoDataParams ?: WifiAutoDataParams()
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = "Thời gian trễ tắt 4G sau khi kết nối Wi-Fi:",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-                )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                // A. Thời gian chờ TẮT 4G khi kết nối Wi-Fi (0 - 15 giây)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    listOf(5 to "5 giây", 15 to "15 giây", 30 to "30 giây", 60 to "1 phút").forEach { (sec, label) ->
+                    Text(
+                        text = "Thời gian trễ tắt 4G khi có Wi-Fi:",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+                    )
+                    Text(
+                        text = if (config.delaySeconds == 0) "Tức thì (0s)" else "${config.delaySeconds} giây",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+
+                Slider(
+                    value = config.delaySeconds.toFloat(),
+                    onValueChange = { onUpdateParams(config.copy(delaySeconds = it.toInt())) },
+                    valueRange = 0f..15f,
+                    steps = 14,
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary
+                    )
+                )
+
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(0 to "0s (Tức thì)", 3 to "3s", 5 to "5s", 10 to "10s", 15 to "15s").forEach { (sec, label) ->
                         FilterChip(
                             selected = config.delaySeconds == sec,
                             onClick = { onUpdateParams(config.copy(delaySeconds = sec)) },
-                            label = { Text(label, fontSize = 12.sp) },
+                            label = { Text(label, fontSize = 11.5.sp) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                                 selectedLabelColor = MaterialTheme.colorScheme.primary
@@ -374,13 +398,12 @@ fun AutomationConfigEditor(
                     }
                 }
 
+                // B. Lựa chọn SIM
                 Text(
                     text = "Áp dụng cho SIM:",
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
                 )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(
                         TargetSimSelection.AUTO to "Tự động (SIM data)",
                         TargetSimSelection.SIM_1 to "SIM 1",
@@ -407,6 +430,7 @@ fun AutomationConfigEditor(
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                 )
 
+                // C. Tự bật lại 4G khi mất Wi-Fi (0 - 15 giây)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -415,7 +439,7 @@ fun AutomationConfigEditor(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Tự bật lại 4G khi mất Wi-Fi", style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            "Đảm bảo duy trì kết nối mạng thông suốt (chờ 20s chống rung lắc mạng)",
+                            "Tự động khôi phục kết nối khi ra khỏi vùng phủ sóng Wi-Fi.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -424,6 +448,60 @@ fun AutomationConfigEditor(
                         checked = config.autoRestoreDataOnDisconnect,
                         onCheckedChange = { onUpdateParams(config.copy(autoRestoreDataOnDisconnect = it)) }
                     )
+                }
+
+                AnimatedVisibility(visible = config.autoRestoreDataOnDisconnect) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Thời gian trễ bật lại 4G:",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+                            )
+                            Text(
+                                text = if (config.restoreDelaySeconds == 0) "Tức thì (0s)" else "${config.restoreDelaySeconds} giây",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
+
+                        Slider(
+                            value = config.restoreDelaySeconds.toFloat(),
+                            onValueChange = { onUpdateParams(config.copy(restoreDelaySeconds = it.toInt())) },
+                            valueRange = 0f..15f,
+                            steps = 14,
+                            colors = SliderDefaults.colors(
+                                thumbColor = MaterialTheme.colorScheme.primary,
+                                activeTrackColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(0 to "0s (Tức thì)", 2 to "2s", 3 to "3s", 5 to "5s", 10 to "10s", 15 to "15s").forEach { (sec, label) ->
+                                FilterChip(
+                                    selected = config.restoreDelaySeconds == sec,
+                                    onClick = { onUpdateParams(config.copy(restoreDelaySeconds = sec)) },
+                                    label = { Text(label, fontSize = 11.5.sp) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        selectedLabelColor = MaterialTheme.colorScheme.primary
+                                    )
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = if (config.restoreDelaySeconds == 0) "Khôi phục dữ liệu di động ngay lập tức khi vừa mất Wi-Fi."
+                            else "Chờ ${config.restoreDelaySeconds} giây trước khi bật lại 4G để chống rung lắc khi Wi-Fi chập chờn.",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                        )
+                    }
                 }
             }
         }
