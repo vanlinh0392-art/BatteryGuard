@@ -2,8 +2,14 @@ package com.pin.batteryguard.ui.screen.shield
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,10 +29,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -35,6 +45,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,9 +62,12 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -79,6 +93,7 @@ fun AppShieldScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    var isAdvancedSettingsExpanded by remember { mutableStateOf(false) }
 
     // Tự động làm mới quyền và trạng thái khi quay lại màn hình từ Cài đặt
     LifecycleResumeEffect(Unit) {
@@ -96,7 +111,7 @@ fun AppShieldScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Bảo vệ Ngân hàng & Ứng dụng", fontSize = 18.sp, fontWeight = FontWeight.Bold) },
+                title = { Text("Bảo vệ Ứng dụng & Ngân hàng", fontSize = 18.sp, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Quay lại")
@@ -117,21 +132,22 @@ fun AppShieldScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
         ) {
-            // 1. Thẻ Trạng thái Hoạt động
+            // 1. Hero Bento Card: Trực quan hóa trung tâm trạng thái & Master switch
             item {
-                LiveStatusCard(
+                Spacer(modifier = Modifier.height(4.dp))
+                HeroProtectionCard(
                     uiState = uiState,
                     onToggleMaster = { viewModel.setMasterEnabled(it) },
-                    onManualHide = { viewModel.manualHide() },
+                    onToggleAutoDetectBanks = { viewModel.updateToggle(autoDetectBanks = it) },
                     onManualRevert = { viewModel.manualRevert() }
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
             }
 
-            // 2. Cảnh báo quyền nếu thiếu
+            // 2. Banner cảnh báo quyền siêu tinh gọn (Chỉ hiện khi thiếu quyền)
             if (!uiState.hasWriteSecureSettings || !uiState.isAccessibilityEnabled) {
                 item {
-                    PermissionWarningCard(
+                    CompactPermissionBanner(
                         hasSecure = uiState.hasWriteSecureSettings,
                         hasAccessibility = uiState.isAccessibilityEnabled,
                         onOpenAccessibility = {
@@ -142,153 +158,65 @@ fun AppShieldScreen(
                         },
                         onOpenPermissionGranter = onNavigateToPermissionGranter
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                 }
             }
 
-            // 3. Cấu hình Hẹn giờ Tự động Bật lại (Auto Re-enable Timer)
+            // 3. Tùy chỉnh nâng cao (Progressive Disclosure - Collapsible Accordion)
             item {
-                AutoRevertTimerCard(
-                    autoRevertMinutes = uiState.config.autoRevertMinutes,
-                    revertOnScreenOff = uiState.config.revertOnScreenOff,
-                    autoRestartShizuku = uiState.config.autoRestartShizuku,
-                    relaunchApp = uiState.config.relaunchApp,
+                AdvancedSettingsAccordion(
+                    isExpanded = isAdvancedSettingsExpanded,
+                    onToggleExpand = { isAdvancedSettingsExpanded = !isAdvancedSettingsExpanded },
+                    uiState = uiState,
                     onSelectMinutes = { viewModel.setAutoRevertMinutes(it) },
                     onToggleScreenOff = { viewModel.updateToggle(revertOnScreenOff = it) },
                     onToggleAutoShizuku = { viewModel.updateToggle(autoRestartShizuku = it) },
-                    onToggleRelaunch = { viewModel.updateToggle(relaunchApp = it) }
+                    onToggleRelaunch = { viewModel.updateToggle(relaunchApp = it) },
+                    onToggleDevOptions = { viewModel.updateToggle(hideDevOptions = it) },
+                    onToggleAdb = { viewModel.updateToggle(hideAdb = it) },
+                    onToggleWirelessAdb = { viewModel.updateToggle(hideWirelessAdb = it) },
+                    onToggleAccessibility = { viewModel.updateToggle(hideAccessibility = it) },
+                    onManualHide = { viewModel.manualHide() }
                 )
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
-            // 4. Các thiết lập cần ẩn (Scope)
+            // 4. Thanh tìm kiếm và Filter Tabs
             item {
-                ProtectionScopeCard(
-                    hideDevOptions = uiState.config.hideDevOptions,
-                    hideAdb = uiState.config.hideAdb,
-                    hideWirelessAdb = uiState.config.hideWirelessAdb,
-                    hideAccessibility = uiState.config.hideAccessibility,
-                    onToggleDevOptions = { viewModel.updateToggle(hideDevOptions = it) },
-                    onToggleAdb = { viewModel.updateToggle(hideAdb = it) },
-                    onToggleWirelessAdb = { viewModel.updateToggle(hideWirelessAdb = it) },
-                    onToggleAccessibility = { viewModel.updateToggle(hideAccessibility = it) }
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-
-            // 2.5 Cơ chế Tự động phát hiện Ngân hàng & Ví điện tử
-            item {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (uiState.config.autoDetectBanks)
-                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                        else
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-                    ),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    "Tự động nhận diện Ngân hàng",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Surface(
-                                    color = MaterialTheme.colorScheme.primary,
-                                    shape = RoundedCornerShape(4.dp)
-                                ) {
-                                    Text(
-                                        "Khuyên dùng",
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                "Tự động phát hiện & bảo vệ tất cả ứng dụng ngân hàng, ví điện tử, chứng khoán mà không cần phải tick chọn thủ công.",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                                lineHeight = 15.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Switch(
-                            checked = uiState.config.autoDetectBanks,
-                            onCheckedChange = { viewModel.updateToggle(autoDetectBanks = it) }
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-
-            // 5. Tiêu đề danh sách ứng dụng chọn thêm & Tìm kiếm
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            "ỨNG DỤNG CHỌN THÊM",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            "Chọn thêm các ứng dụng hoặc game bạn muốn bảo vệ",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
-
-                    Button(
-                        onClick = { viewModel.selectAllBanks() },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                        contentPadding = ButtonDefaults.TextButtonContentPadding
-                    ) {
-                        Text("⭐ Chọn ngân hàng", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = uiState.searchQuery,
-                    onValueChange = { viewModel.onSearchQueryChanged(it) },
-                    placeholder = { Text("Tìm ứng dụng hoặc package...") },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true
+                AppFilterSection(
+                    searchQuery = uiState.searchQuery,
+                    onSearchQueryChanged = { viewModel.onSearchQueryChanged(it) },
+                    selectedTab = uiState.filterTab,
+                    onSelectTab = { viewModel.onFilterTabChanged(it) },
+                    totalCount = uiState.apps.size,
+                    shieldedCount = uiState.apps.count { it.isShielded },
+                    banksCount = uiState.apps.count { it.isPresetBank },
+                    onSelectAllBanks = { viewModel.selectAllBanks() }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // 6. Danh sách ứng dụng
+            // 5. Danh sách ứng dụng
             if (uiState.isLoading) {
                 item {
                     Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
+                        CircularProgressIndicator(strokeWidth = 3.dp)
                     }
                 }
             } else if (uiState.filteredApps.isEmpty()) {
                 item {
-                    Text(
-                        "Không tìm thấy ứng dụng phù hợp.",
-                        modifier = Modifier.padding(16.dp),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (uiState.searchQuery.isNotBlank()) "Không tìm thấy ứng dụng '${uiState.searchQuery}'" else "Không có ứng dụng trong mục này",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
                 }
             } else {
                 items(uiState.filteredApps, key = { it.packageName }) { appItem ->
@@ -300,283 +228,471 @@ fun AppShieldScreen(
             }
 
             item {
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(28.dp))
             }
         }
     }
 }
 
+/**
+ * 1. Hero Protection Card (Bento Style): Trực quan hóa trạng thái 3 cấp độ
+ */
 @Composable
-private fun LiveStatusCard(
+private fun HeroProtectionCard(
     uiState: AppShieldUiState,
     onToggleMaster: (Boolean) -> Unit,
-    onManualHide: () -> Unit,
+    onToggleAutoDetectBanks: (Boolean) -> Unit,
     onManualRevert: () -> Unit
 ) {
-    val statusColor = when {
-        !uiState.config.isEnabled -> Color.Gray
-        uiState.isCurrentlyHidden -> Color(0xFFFFA000) // Cam cảnh báo
-        else -> BatteryFull // Xanh an toàn
+    val isEnabled = uiState.config.isEnabled
+    val isHidden = uiState.isCurrentlyHidden
+
+    val cardBg = when {
+        !isEnabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        isHidden -> Color(0xFFFFA000).copy(alpha = 0.12f)
+        else -> BatteryFull.copy(alpha = 0.12f)
     }
 
-    val statusText = when {
-        !uiState.config.isEnabled -> "ĐANG TẮT BẢO VỆ"
-        uiState.isCurrentlyHidden -> "ĐANG ẨN CÀI ĐẶT (ĐANG BẢO VỆ)"
-        else -> "SẴN SÀNG BẢO VỆ"
+    val statusIcon = when {
+        !isEnabled -> Icons.Default.Security
+        isHidden -> Icons.Default.Lock
+        else -> Icons.Default.CheckCircle
+    }
+
+    val statusColor = when {
+        !isEnabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+        isHidden -> Color(0xFFE65100)
+        else -> BatteryFull
+    }
+
+    val statusTitle = when {
+        !isEnabled -> "ĐÃ TẮT BẢO VỆ"
+        isHidden -> "ĐANG ẨN CÀI ĐẶT HỆ THỐNG"
+        else -> "BẢO VỆ TỰ ĐỘNG 24/7"
+    }
+
+    val statusSubtitle = when {
+        !isEnabled -> "Bật công tắc để kích hoạt bảo vệ tàng hình khi mở ngân hàng"
+        isHidden -> "Đang che giấu Developer Options & ADB cho: ${uiState.triggeredPackage}"
+        else -> "Tự động ẩn Developer Options & ADB ngay khi mở app nhạy cảm"
     }
 
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
+        shape = RoundedCornerShape(20.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // Hàng 1: Badge trạng thái + Master Switch
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Box(
                     modifier = Modifier
-                        .size(12.dp)
-                        .background(statusColor, CircleShape)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(statusText, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = statusColor)
-                    if (uiState.isCurrentlyHidden && uiState.triggeredPackage.isNotBlank()) {
-                        Text(
-                            "Đang ẩn cho: ${uiState.triggeredPackage}",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                        .size(36.dp)
+                        .background(statusColor.copy(alpha = 0.18f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(statusIcon, contentDescription = null, tint = statusColor, modifier = Modifier.size(20.dp))
                 }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(statusTitle, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = statusColor)
+                    Text(statusSubtitle, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                Spacer(modifier = Modifier.width(6.dp))
                 Switch(
-                    checked = uiState.config.isEnabled,
+                    checked = isEnabled,
                     onCheckedChange = onToggleMaster
                 )
             }
 
+            // Nút Khôi phục ngay (Chỉ hiển thị khi đang thực sự ẩn)
+            if (isHidden) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = onManualRevert,
+                    colors = ButtonDefaults.buttonColors(containerColor = BatteryFull),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().height(42.dp)
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("⚡ Khôi phục cài đặt ngay", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
 
+            // Hàng 2: Quick Metrics Chips
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Button(
-                    onClick = onManualRevert,
-                    colors = ButtonDefaults.buttonColors(containerColor = BatteryFull),
+                Surface(
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("⚡ Khôi phục ngay", fontSize = 12.sp, color = Color.White)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("🏦", fontSize = 13.sp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Column {
+                            Text("${uiState.autoDetectedCount} Ngân hàng", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Tự động nhận diện", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                        }
+                    }
                 }
 
-                OutlinedButton(
-                    onClick = onManualHide,
+                Surface(
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("🛡️ Ẩn thử nghiệm", fontSize = 12.sp)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("🛡️", fontSize = 13.sp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Column {
+                            Text("${uiState.manuallyShieldedCount} Chọn thêm", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Thủ công bổ sung", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                        }
+                    }
                 }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Hàng 3: Công tắc nhận diện ngân hàng thông minh (inline gọn)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { onToggleAutoDetectBanks(!uiState.config.autoDetectBanks) }
+                    .padding(vertical = 4.dp, horizontal = 2.dp)
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Tự động nhận diện app Ngân hàng & Ví", fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                "Khuyên dùng",
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                    Text("Tự nhận diện hơn 60 app tài chính không cần tick tay", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                }
+                Switch(
+                    checked = uiState.config.autoDetectBanks,
+                    onCheckedChange = onToggleAutoDetectBanks,
+                    modifier = Modifier.size(36.dp)
+                )
             }
         }
     }
 }
 
+/**
+ * 2. Compact Permission Banner (1 dòng mỏng, chỉ xuất hiện khi thiếu quyền)
+ */
 @Composable
-private fun PermissionWarningCard(
+private fun CompactPermissionBanner(
     hasSecure: Boolean,
     hasAccessibility: Boolean,
     onOpenAccessibility: () -> Unit,
     onOpenPermissionGranter: () -> Unit
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = BatteryLow.copy(alpha = 0.1f)),
+    val message = when {
+        !hasSecure && !hasAccessibility -> "Thiếu quyền Secure Settings & Trợ năng"
+        !hasSecure -> "Thiếu quyền WRITE_SECURE_SETTINGS"
+        else -> "Chưa bật Dịch vụ Trợ năng AppShield"
+    }
+
+    Surface(
+        color = BatteryLow.copy(alpha = 0.1f),
         shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, BatteryLow.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Warning, contentDescription = null, tint = BatteryLow, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Chưa đủ quyền hoạt động tự động", fontWeight = FontWeight.Bold, color = BatteryLow, fontSize = 13.sp)
-            }
-            Spacer(modifier = Modifier.height(6.dp))
-
-            if (!hasSecure) {
-                Text("• Thiếu quyền WRITE_SECURE_SETTINGS để can thiệp cài đặt hệ thống.", fontSize = 12.sp)
-            }
-            if (!hasAccessibility) {
-                Text("• Chưa bật Dịch vụ Trợ năng để phát hiện khi mở app ngân hàng.", fontSize = 12.sp)
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (!hasSecure) {
-                    Button(
-                        onClick = onOpenPermissionGranter,
-                        colors = ButtonDefaults.buttonColors(containerColor = BatteryLow),
-                        contentPadding = ButtonDefaults.TextButtonContentPadding
-                    ) {
-                        Text("Cấp quyền qua Shizuku", fontSize = 11.sp, color = Color.White)
-                    }
-                }
-                if (!hasAccessibility) {
-                    OutlinedButton(
-                        onClick = onOpenAccessibility,
-                        contentPadding = ButtonDefaults.TextButtonContentPadding
-                    ) {
-                        Text("Mở Cài đặt Trợ năng", fontSize = 11.sp)
-                    }
-                }
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.Warning, contentDescription = null, tint = BatteryLow, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                message,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = BatteryLow,
+                modifier = Modifier.weight(1f)
+            )
+            Button(
+                onClick = if (!hasSecure) onOpenPermissionGranter else onOpenAccessibility,
+                colors = ButtonDefaults.buttonColors(containerColor = BatteryLow),
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = ButtonDefaults.TextButtonContentPadding,
+                modifier = Modifier.height(30.dp)
+            ) {
+                Text(if (!hasSecure) "Cấp quyền" else "Bật trợ năng", fontSize = 10.sp, color = Color.White)
             }
         }
     }
 }
 
+/**
+ * 3. Tùy chỉnh nâng cao (Accordion Collapsible - Progressive Disclosure)
+ */
 @Composable
-private fun AutoRevertTimerCard(
-    autoRevertMinutes: Int,
-    revertOnScreenOff: Boolean,
-    autoRestartShizuku: Boolean,
-    relaunchApp: Boolean,
+private fun AdvancedSettingsAccordion(
+    isExpanded: Boolean,
+    onToggleExpand: () -> Unit,
+    uiState: AppShieldUiState,
     onSelectMinutes: (Int) -> Unit,
     onToggleScreenOff: (Boolean) -> Unit,
     onToggleAutoShizuku: (Boolean) -> Unit,
-    onToggleRelaunch: (Boolean) -> Unit
+    onToggleRelaunch: (Boolean) -> Unit,
+    onToggleDevOptions: (Boolean) -> Unit,
+    onToggleAdb: (Boolean) -> Unit,
+    onToggleWirelessAdb: (Boolean) -> Unit,
+    onToggleAccessibility: (Boolean) -> Unit,
+    onManualHide: () -> Unit
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("TỰ ĐỘNG BẬT LẠI (AUTO RE-ENABLE TIMER)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text("Thời gian tự động bật lại cài đặt sau khi mở app:", fontSize = 12.sp)
-
-            Spacer(modifier = Modifier.height(8.dp))
+        Column(modifier = Modifier.padding(14.dp)) {
+            // Thanh tiêu đề bấm để mở rộng / thu gọn
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onToggleExpand() }
             ) {
-                listOf(2, 5, 10, 15, 30).forEach { mins ->
-                    val isSelected = autoRevertMinutes == mins
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { onSelectMinutes(mins) },
-                        label = {
-                            Text(
-                                if (mins == 10) "10p (Chuẩn)" else "${mins}p",
-                                fontSize = 11.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                            )
-                        }
+                Icon(Icons.Default.Tune, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Tùy chỉnh nâng cao", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "${uiState.config.autoRevertMinutes} phút • ${if (uiState.config.revertOnScreenOff) "Khôi phục khi tắt màn hình" else "Đợi hết giờ"}",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                 }
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
-            Slider(
-                value = autoRevertMinutes.toFloat(),
-                onValueChange = { onSelectMinutes(it.toInt()) },
-                valueRange = 1f..60f,
-                steps = 58
-            )
-            Text(
-                "Tùy chỉnh: $autoRevertMinutes phút",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                modifier = Modifier.align(Alignment.End)
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Switch Screen Off
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Bật lại ngay khi khóa màn hình", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    Text("Khôi phục cài đặt khi tắt máy, không cần đợi hết giờ", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                }
-                Switch(checked = revertOnScreenOff, onCheckedChange = onToggleScreenOff)
-            }
+                Column(modifier = Modifier.padding(top = 12.dp)) {
+                    // 1. Hẹn giờ hoàn tác
+                    Text("HẸN GIỜ TỰ ĐỘNG BẬT LẠI", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(2, 5, 10, 15, 30).forEach { mins ->
+                            val isSelected = uiState.config.autoRevertMinutes == mins
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { onSelectMinutes(mins) },
+                                label = {
+                                    Text(
+                                        if (mins == 10) "10p (Chuẩn)" else "${mins}p",
+                                        fontSize = 10.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                },
+                                modifier = Modifier.height(30.dp)
+                            )
+                        }
+                    }
 
-            // Switch Auto Shizuku
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Tự bật lại Shizuku sau khi khôi phục", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    Text("Dùng ShizukuAutoStarter kích hoạt Shizuku qua ADB 5555", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                }
-                Switch(checked = autoRestartShizuku, onCheckedChange = onToggleAutoShizuku)
-            }
+                    Slider(
+                        value = uiState.config.autoRevertMinutes.toFloat(),
+                        onValueChange = { onSelectMinutes(it.toInt()) },
+                        valueRange = 1f..60f,
+                        steps = 58
+                    )
+                    Text(
+                        "Thời gian: ${uiState.config.autoRevertMinutes} phút",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.align(Alignment.End)
+                    )
 
-            // Switch Relaunch
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Đóng ứng dụng trước khi ẩn (Relaunch)", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    Text("Xóa cache quét bảo mật của ngân hàng lúc khởi động", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // 2. Các công tắc hoạt động
+                    SettingSwitchRow("Bật lại ngay khi khóa màn hình", "Khôi phục khi tắt máy, không cần đợi hết giờ", uiState.config.revertOnScreenOff, onToggleScreenOff)
+                    SettingSwitchRow("Tự bật lại Shizuku sau khi khôi phục", "Khởi động Shizuku daemon qua ADB 5555", uiState.config.autoRestartShizuku, onToggleAutoShizuku)
+                    SettingSwitchRow("Đóng app trước khi ẩn (Relaunch)", "Xóa cache kiểm tra bảo mật của ngân hàng", uiState.config.relaunchApp, onToggleRelaunch)
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // 3. Phạm vi che giấu
+                    Text("PHẠM VI CHE GIẤU", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    SettingSwitchRow("Ẩn Tùy chọn nhà phát triển", null, uiState.config.hideDevOptions, onToggleDevOptions)
+                    SettingSwitchRow("Ẩn Gỡ lỗi USB (ADB Debugging)", null, uiState.config.hideAdb, onToggleAdb)
+                    SettingSwitchRow("Ẩn Gỡ lỗi không dây (Wireless Debugging)", null, uiState.config.hideWirelessAdb, onToggleWirelessAdb)
+                    SettingSwitchRow("Tạm thời lọc Dịch vụ Trợ năng khác", "Tránh app ngân hàng chặn vì Accessibility", uiState.config.hideAccessibility, onToggleAccessibility)
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Nút thử nghiệm ẩn
+                    OutlinedButton(
+                        onClick = onManualHide,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth().height(38.dp)
+                    ) {
+                        Text("🛡️ Ẩn thử nghiệm (Test Shield)", fontSize = 11.sp)
+                    }
                 }
-                Switch(checked = relaunchApp, onCheckedChange = onToggleRelaunch)
             }
         }
     }
 }
 
 @Composable
-private fun ProtectionScopeCard(
-    hideDevOptions: Boolean,
-    hideAdb: Boolean,
-    hideWirelessAdb: Boolean,
-    hideAccessibility: Boolean,
-    onToggleDevOptions: (Boolean) -> Unit,
-    onToggleAdb: (Boolean) -> Unit,
-    onToggleWirelessAdb: (Boolean) -> Unit,
-    onToggleAccessibility: (Boolean) -> Unit
+private fun SettingSwitchRow(
+    title: String,
+    subtitle: String?,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth()
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(vertical = 4.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("CÁC THÀNH PHẦN CẦN ẨN", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                Text("Ẩn Tùy chọn nhà phát triển (Dev Options)", fontSize = 13.sp, modifier = Modifier.weight(1f))
-                Switch(checked = hideDevOptions, onCheckedChange = onToggleDevOptions)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+            if (subtitle != null) {
+                Text(subtitle, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
             }
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.size(34.dp)
+        )
+    }
+}
 
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                Text("Ẩn Gỡ lỗi USB (ADB Debugging)", fontSize = 13.sp, modifier = Modifier.weight(1f))
-                Switch(checked = hideAdb, onCheckedChange = onToggleAdb)
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                Text("Ẩn Gỡ lỗi không dây (Wireless Debugging)", fontSize = 13.sp, modifier = Modifier.weight(1f))
-                Switch(checked = hideWirelessAdb, onCheckedChange = onToggleWirelessAdb)
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Tạm thời lọc Dịch vụ Trợ năng khác", fontSize = 13.sp)
-                    Text("Tránh app ngân hàng chặn vì phát hiện Accessibility", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+/**
+ * 4. Thanh tìm kiếm & Tabs lọc ứng dụng
+ */
+@Composable
+private fun AppFilterSection(
+    searchQuery: String,
+    onSearchQueryChanged: (String) -> Unit,
+    selectedTab: AppShieldFilterTab,
+    onSelectTab: (AppShieldFilterTab) -> Unit,
+    totalCount: Int,
+    shieldedCount: Int,
+    banksCount: Int,
+    onSelectAllBanks: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // Thanh Search
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = onSearchQueryChanged,
+            placeholder = { Text("Tìm ứng dụng hoặc package...", fontSize = 12.sp) },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+            trailingIcon = {
+                if (searchQuery.isNotBlank()) {
+                    IconButton(onClick = { onSearchQueryChanged("") }) {
+                        Icon(Icons.Default.Clear, contentDescription = "Xóa", modifier = Modifier.size(16.dp))
+                    }
                 }
-                Switch(checked = hideAccessibility, onCheckedChange = onToggleAccessibility)
-            }
+            },
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(12.dp),
+            singleLine = true
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Hàng Tabs Lọc
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            FilterChip(
+                selected = selectedTab == AppShieldFilterTab.ALL,
+                onClick = { onSelectTab(AppShieldFilterTab.ALL) },
+                label = { Text("Tất cả ($totalCount)", fontSize = 10.sp) },
+                modifier = Modifier.height(28.dp),
+                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.primaryContainer)
+            )
+
+            FilterChip(
+                selected = selectedTab == AppShieldFilterTab.SHIELDED,
+                onClick = { onSelectTab(AppShieldFilterTab.SHIELDED) },
+                label = { Text("Đang bảo vệ ($shieldedCount)", fontSize = 10.sp) },
+                modifier = Modifier.height(28.dp),
+                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.primaryContainer)
+            )
+
+            FilterChip(
+                selected = selectedTab == AppShieldFilterTab.BANKS,
+                onClick = { onSelectTab(AppShieldFilterTab.BANKS) },
+                label = { Text("Ngân hàng ($banksCount)", fontSize = 10.sp) },
+                modifier = Modifier.height(28.dp),
+                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.primaryContainer)
+            )
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Nút chọn nhanh ngân hàng
+            Text(
+                "⭐ Chọn tất cả",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable { onSelectAllBanks() }
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
+            )
         }
     }
 }
 
+/**
+ * 5. Dòng hiển thị từng Ứng dụng (AppShieldRow)
+ */
 @Composable
 private fun AppShieldRow(
     item: AppShieldUiItem,
@@ -591,6 +707,7 @@ private fun AppShieldRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
             .clickable { onToggle(!item.isShielded) }
             .padding(vertical = 6.dp, horizontal = 4.dp)
     ) {
@@ -598,27 +715,29 @@ private fun AppShieldRow(
             Image(
                 bitmap = iconBitmap,
                 contentDescription = null,
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(10.dp))
             )
         } else {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)),
+                    .size(38.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Security, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Default.Security, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
             }
         }
 
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(10.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = item.appName,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -629,8 +748,8 @@ private fun AppShieldRow(
                         shape = RoundedCornerShape(4.dp)
                     ) {
                         Text(
-                            "Tự động nhận diện",
-                            fontSize = 9.sp,
+                            "Tự động",
+                            fontSize = 8.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
@@ -644,7 +763,7 @@ private fun AppShieldRow(
                     ) {
                         Text(
                             "Ngân hàng",
-                            fontSize = 9.sp,
+                            fontSize = 8.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
@@ -654,7 +773,7 @@ private fun AppShieldRow(
             }
             Text(
                 text = item.packageName,
-                fontSize = 11.sp,
+                fontSize = 10.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -663,7 +782,8 @@ private fun AppShieldRow(
 
         Switch(
             checked = item.isShielded,
-            onCheckedChange = onToggle
+            onCheckedChange = onToggle,
+            modifier = Modifier.size(36.dp)
         )
     }
 }

@@ -30,6 +30,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
+enum class AppShieldFilterTab(val label: String) {
+    ALL("Tất cả"),
+    SHIELDED("Đang bảo vệ"),
+    BANKS("Ngân hàng")
+}
+
 data class AppShieldUiItem(
     val packageName: String,
     val appName: String,
@@ -48,6 +54,9 @@ data class AppShieldUiState(
     val apps: List<AppShieldUiItem> = emptyList(),
     val filteredApps: List<AppShieldUiItem> = emptyList(),
     val searchQuery: String = "",
+    val filterTab: AppShieldFilterTab = AppShieldFilterTab.ALL,
+    val autoDetectedCount: Int = 0,
+    val manuallyShieldedCount: Int = 0,
     val isLoading: Boolean = true,
     val message: String? = null
 )
@@ -65,6 +74,7 @@ class AppShieldViewModel @Inject constructor(
     val uiState: StateFlow<AppShieldUiState> = _uiState.asStateFlow()
 
     private val searchQueryFlow = MutableStateFlow("")
+    private val filterTabFlow = MutableStateFlow(AppShieldFilterTab.ALL)
 
     init {
         refreshPermissions()
@@ -86,13 +96,14 @@ class AppShieldViewModel @Inject constructor(
             }
         }
 
-        // Tải danh sách ứng dụng và kết hợp bộ lọc tìm kiếm
+        // Tải danh sách ứng dụng và kết hợp bộ lọc tìm kiếm & tab
         viewModelScope.launch {
             combine(
                 shieldedAppDao.getAllShieldedApps(),
                 searchQueryFlow,
+                filterTabFlow,
                 settingsDataStore.shieldConfigFlow
-            ) { dbShielded, query, config ->
+            ) { dbShielded, query, tab, config ->
                 val allUserApps = loadAllInstalledUserApps()
                 val shieldedMap = dbShielded.associateBy { it.packageName }
 
@@ -114,20 +125,31 @@ class AppShieldViewModel @Inject constructor(
                         .thenBy { it.appName.lowercase() }
                 )
 
-                val filtered = if (query.isBlank()) {
-                    merged
+                val tabFiltered = when (tab) {
+                    AppShieldFilterTab.ALL -> merged
+                    AppShieldFilterTab.SHIELDED -> merged.filter { it.isShielded }
+                    AppShieldFilterTab.BANKS -> merged.filter { it.isPresetBank }
+                }
+
+                val finalFiltered = if (query.isBlank()) {
+                    tabFiltered
                 } else {
-                    merged.filter {
+                    tabFiltered.filter {
                         it.appName.contains(query, ignoreCase = true) ||
                         it.packageName.contains(query, ignoreCase = true)
                     }
                 }
 
-                Pair(merged, filtered)
-            }.collectLatest { (all, filtered) ->
+                val autoCount = merged.count { it.isAutoDetected }
+                val manualCount = merged.count { !it.isAutoDetected && it.isShielded }
+
+                Triple(merged, finalFiltered, Pair(autoCount, manualCount))
+            }.collectLatest { (all, filtered, counts) ->
                 _uiState.value = _uiState.value.copy(
                     apps = all,
                     filteredApps = filtered,
+                    autoDetectedCount = counts.first,
+                    manuallyShieldedCount = counts.second,
                     isLoading = false
                 )
             }
@@ -148,6 +170,11 @@ class AppShieldViewModel @Inject constructor(
     fun onSearchQueryChanged(query: String) {
         searchQueryFlow.value = query
         _uiState.value = _uiState.value.copy(searchQuery = query)
+    }
+
+    fun onFilterTabChanged(tab: AppShieldFilterTab) {
+        filterTabFlow.value = tab
+        _uiState.value = _uiState.value.copy(filterTab = tab)
     }
 
     fun setMasterEnabled(enabled: Boolean) {
