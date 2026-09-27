@@ -87,6 +87,7 @@ class AutomationCoordinator @Inject constructor(
         this.scope = serviceScope
         Log.i(TAG, "🚀 Khởi động AutomationCoordinator trên BatteryMonitorService")
 
+        initInitialBatteryState()
         createNotificationChannel()
         registerNetworkCallback()
         registerRingerAlarmReceiver()
@@ -514,6 +515,17 @@ class AutomationCoordinator @Inject constructor(
                 "Sẵn sàng kích hoạt Doze sâu"
             )
         }
+    }
+
+    private fun initInitialBatteryState() {
+        try {
+            val bm = context.getSystemService(Context.BATTERY_SERVICE) as? android.os.BatteryManager
+            val cap = bm?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+            if (cap in 0..100) {
+                currentBatteryLevel = cap
+            }
+            isCurrentlyCharging = bm?.isCharging == true
+        } catch (_: Exception) {}
     }
 
     private fun createNotificationChannel() {

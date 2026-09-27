@@ -1,6 +1,8 @@
 package com.pin.batteryguard.shizuku
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -14,6 +16,7 @@ data class ProcessExecutionResult(
 
 /**
  * Thực thi lệnh qua Shizuku process có cơ chế Timeout an toàn, tự động hủy process nếu bị treo.
+ * Đọc đồng thời (concurrent async) stdout và stderr để triệt tiêu nguy cơ Deadlock Pipe Buffer (64KB kernel limit).
  */
 suspend fun executeShizukuCommandWithTimeout(
     cmd: Array<String>,
@@ -25,15 +28,29 @@ suspend fun executeShizukuCommandWithTimeout(
         val p = process
 
         val result = withTimeoutOrNull(timeoutMs) {
-            val stdout = p.inputStream.bufferedReader().readText().trim()
-            val stderr = p.errorStream.bufferedReader().readText().trim()
-            val exitCode = p.waitFor()
-            ProcessExecutionResult(
-                exitCode = exitCode,
-                stdout = stdout,
-                stderr = stderr,
-                isTimedOut = false
-            )
+            coroutineScope {
+                val stdoutDeferred = async(Dispatchers.IO) {
+                    try {
+                        p.inputStream.bufferedReader().use { it.readText().trim() }
+                    } catch (_: Exception) {
+                        ""
+                    }
+                }
+                val stderrDeferred = async(Dispatchers.IO) {
+                    try {
+                        p.errorStream.bufferedReader().use { it.readText().trim() }
+                    } catch (_: Exception) {
+                        ""
+                    }
+                }
+                val exitCode = p.waitFor()
+                ProcessExecutionResult(
+                    exitCode = exitCode,
+                    stdout = stdoutDeferred.await(),
+                    stderr = stderrDeferred.await(),
+                    isTimedOut = false
+                )
+            }
         }
 
         if (result != null) {
@@ -51,6 +68,9 @@ suspend fun executeShizukuCommandWithTimeout(
             )
         }
     } catch (e: Exception) {
+        try {
+            process?.destroyForcibly()
+        } catch (_: Exception) {}
         ProcessExecutionResult(
             exitCode = -1,
             stdout = "",
@@ -58,10 +78,14 @@ suspend fun executeShizukuCommandWithTimeout(
             isTimedOut = false
         )
     } finally {
- try {
- process?.inputStream?.close()
- process?.errorStream?.close()
- process?.outputStream?.close()
- } catch (_: Exception) {}
- }
+        try {
+            process?.inputStream?.close()
+        } catch (_: Exception) {}
+        try {
+            process?.errorStream?.close()
+        } catch (_: Exception) {}
+        try {
+            process?.outputStream?.close()
+        } catch (_: Exception) {}
+    }
 }

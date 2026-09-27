@@ -52,13 +52,9 @@ class UidPackageResolver @Inject constructor(
         cached = emptyMap()
     }
 
-    private fun execute(vararg command: String): String = try {
-        val process = shizukuNewProcess(command.toList().toTypedArray(), null, null)
-        val output = process.inputStream.bufferedReader().readText()
-        process.waitFor()
-        output
-    } catch (_: Exception) {
-        ""
+    private suspend fun execute(vararg command: String): String {
+        val result = executeShizukuCommandWithTimeout(command.toList().toTypedArray(), timeoutMs = 6000L)
+        return if (result.isSuccess) result.stdout else ""
     }
 
     companion object {

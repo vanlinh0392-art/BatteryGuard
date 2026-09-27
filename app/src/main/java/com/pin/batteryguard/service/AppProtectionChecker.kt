@@ -8,7 +8,7 @@ import android.provider.Settings
 import android.provider.Telephony
 import android.telecom.TelecomManager
 import com.pin.batteryguard.shizuku.ShizukuManager
-import com.pin.batteryguard.shizuku.shizukuNewProcess
+import com.pin.batteryguard.shizuku.executeShizukuCommandWithTimeout
 import com.pin.batteryguard.util.PackageHelper
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -58,10 +58,15 @@ class AppProtectionChecker @Inject constructor(
     suspend fun hasActiveForegroundService(packageName: String): Boolean = withContext(Dispatchers.IO) {
         if (!shizukuManager.ensureReady()) return@withContext true
         try {
-            val process = shizukuNewProcess(arrayOf("dumpsys", "activity", "services", packageName), null, null)
-            val output = process.inputStream.bufferedReader().readText()
-            process.waitFor()
-            output.contains("isForeground=true")
+            val result = executeShizukuCommandWithTimeout(
+                arrayOf("dumpsys", "activity", "services", packageName),
+                timeoutMs = 4000L
+            )
+            if (result.isSuccess) {
+                result.stdout.contains("isForeground=true")
+            } else {
+                true // Fail-safe: nếu lệnh lỗi hoặc timeout, giữ an toàn coi như app có foreground service
+            }
         } catch (_: Exception) {
             true
         }

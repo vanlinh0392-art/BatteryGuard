@@ -1,6 +1,7 @@
 package com.pin.batteryguard.service.shield
 
 import android.accessibilityservice.AccessibilityService
+import android.os.SystemClock
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import com.pin.batteryguard.domain.shield.AppShieldManager
@@ -21,6 +22,12 @@ class AppShieldAccessibilityService : AccessibilityService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    @Volatile
+    private var lastHandledPackage: String = ""
+    @Volatile
+    private var lastHandledTime: Long = 0L
+    private val DEBOUNCE_MS = 1500L
+
     companion object {
         @Volatile
         var isRunning: Boolean = false
@@ -39,8 +46,15 @@ class AppShieldAccessibilityService : AccessibilityService() {
         // Bỏ qua chính BatteryGuard và package rỗng
         if (packageName == this.packageName || packageName.isBlank()) return
 
+        val now = SystemClock.elapsedRealtime()
+        if (packageName == lastHandledPackage && (now - lastHandledTime < DEBOUNCE_MS)) {
+            return
+        }
+
         // Kiểm tra kết hợp: Ứng dụng người dùng CHỌN THÊM hoặc TỰ ĐỘNG PHÁT HIỆN Ngân hàng/Ví điện tử
         if (appShieldManager.shouldShieldApp(packageName)) {
+            lastHandledPackage = packageName
+            lastHandledTime = now
             scope.launch {
                 try {
                     appShieldManager.hideSettingsForApp(packageName)
