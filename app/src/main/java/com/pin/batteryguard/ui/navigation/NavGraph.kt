@@ -37,8 +37,11 @@ import com.pin.batteryguard.ui.screen.exceptions.ExceptionListScreen
 import com.pin.batteryguard.ui.screen.history.HistoryScreen
 import com.pin.batteryguard.ui.screen.permission.PermissionGranterScreen
 import com.pin.batteryguard.ui.screen.settings.SettingsScreen
+import com.pin.batteryguard.ui.screen.automation.AutomationScreen
 import com.pin.batteryguard.ui.screen.setup.SetupWizardScreen
 import com.pin.batteryguard.ui.screen.shield.AppShieldScreen
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.outlined.Bolt
 
 sealed class Screen(
     val route: String,
@@ -48,6 +51,7 @@ sealed class Screen(
 ) {
     data object Dashboard : Screen("dashboard", "Tổng quan", Icons.Filled.Dashboard, Icons.Outlined.Dashboard)
     data object Apps : Screen("apps", "Ứng dụng", Icons.Filled.PhonelinkErase, Icons.Outlined.PhonelinkErase)
+    data object Automation : Screen("automation", "Tự động", Icons.Filled.Bolt, Icons.Outlined.Bolt)
     data object Exceptions : Screen("exceptions", "Ngoại lệ", Icons.Filled.Shield, Icons.Outlined.Shield)
     data object History : Screen("history", "Lịch sử", Icons.Filled.History, Icons.Outlined.History)
     data object Settings : Screen("settings", "Cài đặt", Icons.Filled.Settings, Icons.Outlined.Settings)
@@ -59,8 +63,8 @@ sealed class Screen(
 val bottomNavItems = listOf(
     Screen.Dashboard,
     Screen.Apps,
+    Screen.Automation,
     Screen.AppShield,
-    Screen.History,
     Screen.Settings
 )
 
@@ -159,6 +163,13 @@ fun BatteryGuardNavHost() {
             }
             composable(Screen.Apps.route) {
                 AppListScreen()
+            }
+            composable(Screen.Automation.route) {
+                AutomationScreen(
+                    onNavigateToSettings = {
+                        navController.navigate(Screen.Settings.route)
+                    }
+                )
             }
             composable(Screen.Exceptions.route) {
                 ExceptionListScreen()

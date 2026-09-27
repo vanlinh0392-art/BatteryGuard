@@ -58,6 +58,7 @@ class BatteryMonitorService : LifecycleService() {
     @Inject lateinit var uidPackageResolver: UidPackageResolver
     @Inject lateinit var protectionChecker: AppProtectionChecker
     @Inject lateinit var appShieldManager: com.pin.batteryguard.domain.shield.AppShieldManager
+    @Inject lateinit var automationCoordinator: com.pin.batteryguard.automation.AutomationCoordinator
 
     private val stateMutex = Mutex()
     private val differ = BatteryDrainDiffer()
@@ -82,6 +83,7 @@ class BatteryMonitorService : LifecycleService() {
         )
         isCharging = (getSystemService(Context.BATTERY_SERVICE) as BatteryManager).isCharging
         registerReceivers()
+        automationCoordinator.start(lifecycleScope)
         maybeCleanupOldData()
 
         lifecycleScope.launch {
@@ -111,12 +113,19 @@ class BatteryMonitorService : LifecycleService() {
             onScreenEvent = { action, _ ->
                 lifecycleScope.launch {
                     stateMutex.withLock {
-                        if (action == Intent.ACTION_SCREEN_OFF) handleScreenOff() else handleScreenOn()
+                        if (action == Intent.ACTION_SCREEN_OFF) {
+                            automationCoordinator.onScreenOff()
+                            handleScreenOff()
+                        } else {
+                            automationCoordinator.onScreenOn()
+                            handleScreenOn()
+                        }
                     }
                 }
             },
             onBatteryChanged = { batteryPct, temperature, charging ->
                 lastBatteryTemperature = temperature
+                automationCoordinator.onBatteryChanged(batteryPct, temperature, charging)
                 lifecycleScope.launch {
                     checkTemperatureAlert(temperature)
                     var chargingChanged = false
@@ -523,6 +532,7 @@ class BatteryMonitorService : LifecycleService() {
     }
 
     override fun onDestroy() {
+        automationCoordinator.stop()
         screenReceiver?.let { runCatching { unregisterReceiver(it) } }
         releaseWakeLock()
         super.onDestroy()
