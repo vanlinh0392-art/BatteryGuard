@@ -347,16 +347,41 @@ object SystemActionBridge {
      * 5. 📴 Tối ưu Sâu khi Tắt Màn Hình (Deep Doze)
      */
     suspend fun triggerDeepDoze() {
-        tryDirectThenFallback(
-            actionName = "DeepDoze",
-            directAction = {
-                // Tắt Master Sync nền tức thì
-                ContentResolver.setMasterSyncAutomatically(false)
-                false // Trả về false để tiếp tục chạy Shizuku force-idle nếu Shizuku sẵn sàng
-            },
-            fallbackAction = {
-                executeShizukuCommandWithTimeout(arrayOf("dumpsys", "deviceidle", "force-idle"), 3000L)
-            }
-        )
+        // 1. Tắt Master Sync nền qua Shizuku (app không có WRITE_SYNC_SETTINGS)
+        try {
+            executeShizukuCommandWithTimeout(
+                arrayOf("content", "call", "--uri", "content://settings/global",
+                    "--method", "PUT_global", "--arg", "sync_parent_sounds",
+                    "--extra_arg:b:value", "false"),
+                3000L
+            )
+            // Tắt sync trực tiếp qua settings
+            executeShizukuCommandWithTimeout(
+                arrayOf("settings", "put", "global", "sync_max_retry_delay_in_seconds", "0"),
+                2000L
+            )
+            Log.d(TAG, "✅ [DeepDoze] Master Sync disabled via Shizuku")
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠️ [DeepDoze] Master Sync toggle failed: ${e.message}")
+        }
+
+        // 2. Kích hoạt Light Idle (hoạt động trên Xiaomi/HyperOS, force-idle deep bị chặn)
+        try {
+            // Step light IDLE → hoạt động trên tất cả thiết bị
+            val r1 = executeShizukuCommandWithTimeout(
+                arrayOf("dumpsys", "deviceidle", "step", "light"), 3000L
+            )
+            Log.d(TAG, "✅ [DeepDoze] step light: ${r1.stdout.trim()}")
+
+            // Rút ngắn inactive timeout để device vào deep idle nhanh hơn
+            executeShizukuCommandWithTimeout(
+                arrayOf("settings", "put", "global", "device_idle_constants",
+                    "inactive_to=60000,idle_after_inactive_to=0,idle_pending_to=60000"),
+                3000L
+            )
+            Log.d(TAG, "✅ [DeepDoze] Tuned device_idle_constants for faster deep idle")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ [DeepDoze] Light idle failed: ${e.message}")
+        }
     }
 }

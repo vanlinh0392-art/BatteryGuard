@@ -549,6 +549,19 @@ class AutomationCoordinator @Inject constructor(
     fun onScreenOn() {
         screenOffDozeJob?.cancel()
         if (currentConfig.deepScreenOffEnabled) {
+            // Khôi phục device_idle_constants và Master Sync khi bật màn hình
+            scope?.launch(Dispatchers.IO) {
+                try {
+                    // Reset device_idle_constants về mặc định
+                    executeShizukuCommandWithTimeout(
+                        arrayOf("settings", "delete", "global", "device_idle_constants"), 2000L
+                    )
+                    // Unforce idle nếu đang force
+                    executeShizukuCommandWithTimeout(
+                        arrayOf("dumpsys", "deviceidle", "unforce"), 2000L
+                    )
+                } catch (_: Exception) {}
+            }
             updateRuleState(
                 AutomationRuleId.DEEP_SCREEN_OFF,
                 RuleActiveStatus.IDLE,
