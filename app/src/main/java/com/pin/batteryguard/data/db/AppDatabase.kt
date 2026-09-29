@@ -29,9 +29,10 @@ import com.pin.batteryguard.data.db.entity.UidBaseline
         UidBaseline::class,
         AppPolicyOverride::class,
         com.pin.batteryguard.data.db.entity.AppShieldSnapshotEntity::class,
-        com.pin.batteryguard.data.db.entity.ShieldedAppEntity::class
+        com.pin.batteryguard.data.db.entity.ShieldedAppEntity::class,
+        com.pin.batteryguard.data.db.entity.XiaomiFixSnapshotEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -44,6 +45,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun appPolicyOverrideDao(): com.pin.batteryguard.data.db.dao.AppPolicyOverrideDao
     abstract fun appShieldSnapshotDao(): com.pin.batteryguard.data.db.dao.AppShieldSnapshotDao
     abstract fun shieldedAppDao(): com.pin.batteryguard.data.db.dao.ShieldedAppDao
+    abstract fun xiaomiFixSnapshotDao(): com.pin.batteryguard.data.db.dao.XiaomiFixSnapshotDao
 
     companion object {
         private const val DATABASE_NAME = "battery_guard.db"
@@ -57,7 +59,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     DATABASE_NAME
-                ).addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build()
+                ).addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build()
                 INSTANCE = instance
                 instance
             }
@@ -130,6 +132,23 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_force_stop_logs_packageName_userId_verified_timestamp ON force_stop_logs (packageName, userId, verified, timestamp)")
                 // BatteryLog indices
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_battery_logs_timestamp ON battery_logs (timestamp)")
+            }
+        }
+
+        val MIGRATION_5_6 = object : androidx.room.migration.Migration(5, 6) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS xiaomi_fix_snapshots (
+                        packageName TEXT PRIMARY KEY NOT NULL,
+                        uid INTEGER NOT NULL,
+                        capturedAt INTEGER NOT NULL,
+                        originalOp10053 INTEGER NOT NULL,
+                        originalOp10008 INTEGER NOT NULL,
+                        originalStandbyBucket INTEGER NOT NULL,
+                        wasInDozeWhitelist INTEGER NOT NULL,
+                        wasInNetpolicy INTEGER NOT NULL
+                    )
+                """.trimIndent())
             }
         }
     }

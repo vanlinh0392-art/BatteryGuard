@@ -191,6 +191,98 @@ fun PermissionGranterScreen(
                         )
                     }
                 }
+
+                // THẺ CHUYÊN DỤNG: Tối ưu thông báo Xiaomi / HyperOS (FixTBXiaomiChina)
+                if (uiState.isXiaomiDevice) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
+                        ),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Filled.NotificationsActive,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (uiState.isChinaRom) "⚡ Sửa Thông Báo HyperOS China" else "⚡ Sửa Thông Báo Xiaomi/HyperOS",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                                Spacer(modifier = Modifier.weight(1f))
+                                if (uiState.selectedAppHasXiaomiSnapshot) {
+                                    Surface(
+                                        color = BatteryFull.copy(alpha = 0.2f),
+                                        shape = RoundedCornerShape(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "Đã tối ưu",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = BatteryFull,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Text(
+                                text = "Tự khởi chạy (Op 10053/10008) · Miễn trừ Doze · Standby Active · 5 AppOps nền",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                lineHeight = 15.sp
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                Button(
+                                    onClick = { viewModel.fixXiaomiForSelectedApp() },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    enabled = !uiState.isXiaomiFixing
+                                ) {
+                                    if (uiState.isXiaomiFixing) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Đang sửa...", fontSize = 12.sp)
+                                    } else {
+                                        Icon(Icons.Filled.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Sửa trễ thông báo", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+
+                                if (uiState.selectedAppHasXiaomiSnapshot) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    OutlinedButton(
+                                        onClick = { viewModel.restoreXiaomiForSelectedApp() },
+                                        shape = RoundedCornerShape(10.dp),
+                                        enabled = !uiState.isXiaomiFixing
+                                    ) {
+                                        Icon(Icons.Filled.Undo, contentDescription = null, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Hoàn tác", fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // Quick Batch Action Button: "Cấp tất cả quyền (Grant All)"
@@ -323,6 +415,11 @@ fun PermissionGranterScreen(
                         label = { Text("✨ Tự động hóa (${uiState.allApps.count { it.isAutomationApp }})") }
                     )
                     FilterChip(
+                        selected = uiState.activeCategory == AppFilterCategory.CHAT_AND_BANKING,
+                        onClick = { viewModel.selectCategory(AppFilterCategory.CHAT_AND_BANKING) },
+                        label = { Text("💬 Chat & Ngân hàng (${uiState.allApps.count { it.isChatOrBankApp }})") }
+                    )
+                    FilterChip(
                         selected = uiState.activeCategory == AppFilterCategory.USER_INSTALLED,
                         onClick = { viewModel.selectCategory(AppFilterCategory.USER_INSTALLED) },
                         label = { Text("Ứng dụng đã cài (${uiState.allApps.count { !it.isSystem }})") }
@@ -332,6 +429,30 @@ fun PermissionGranterScreen(
                         onClick = { viewModel.selectCategory(AppFilterCategory.ALL) },
                         label = { Text("Tất cả (${uiState.allApps.size})") }
                     )
+                }
+
+                if (uiState.isXiaomiDevice && uiState.activeCategory == AppFilterCategory.CHAT_AND_BANKING) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Button(
+                        onClick = { viewModel.batchFixChatAndBankApps() },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        enabled = !uiState.isBatchProcessing
+                    ) {
+                        if (uiState.isBatchProcessing && uiState.batchProgress != null) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Đang sửa ${uiState.batchProgress?.first}/${uiState.batchProgress?.second}...", fontSize = 12.sp)
+                        } else {
+                            Icon(Icons.Filled.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("⚡ Sửa thông báo tất cả app Chat & Ngân hàng", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))

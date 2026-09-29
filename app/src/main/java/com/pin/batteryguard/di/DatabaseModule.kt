@@ -62,4 +62,7 @@ object DatabaseModule {
 
     @Provides
     fun provideShieldedAppDao(db: AppDatabase): com.pin.batteryguard.data.db.dao.ShieldedAppDao = db.shieldedAppDao()
+
+    @Provides
+    fun provideXiaomiFixSnapshotDao(db: AppDatabase): com.pin.batteryguard.data.db.dao.XiaomiFixSnapshotDao = db.xiaomiFixSnapshotDao()
 }

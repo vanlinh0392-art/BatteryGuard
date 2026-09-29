@@ -2,6 +2,8 @@ package com.pin.batteryguard.ui.screen.settings
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pin.batteryguard.data.preferences.SettingsDataStore
@@ -15,12 +17,14 @@ import com.pin.batteryguard.updater.AppUpdateManager
 import com.pin.batteryguard.util.XiaomiHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 data class SettingsUiState(
@@ -31,7 +35,10 @@ data class SettingsUiState(
     val isCheckingUpdate: Boolean = false,
     val updateInfo: AppUpdateInfo? = null,
     val updateMessage: String? = null,
-    val isDownloadingUpdate: Boolean = false
+    val isDownloadingUpdate: Boolean = false,
+    val isFixingXiaomi: Boolean = false,
+    val xiaomiFixMessage: String? = null,
+    val xiaomiProgress: Pair<Int, Int>? = null
 )
 
 @HiltViewModel
@@ -42,7 +49,8 @@ class SettingsViewModel @Inject constructor(
     private val batteryRepository: BatteryRepository,
     private val frozenAppDao: com.pin.batteryguard.data.db.dao.FrozenAppDao,
     private val forceStopManager: com.pin.batteryguard.shizuku.ForceStopManager,
-    private val appUpdateManager: AppUpdateManager
+    private val appUpdateManager: AppUpdateManager,
+    private val xiaomiFixManager: com.pin.batteryguard.permission.XiaomiNotificationFixManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState(isXiaomi = XiaomiHelper.isXiaomi()))
@@ -150,5 +158,47 @@ class SettingsViewModel @Inject constructor(
 
     fun clearUpdateMessage() {
         _uiState.update { it.copy(updateMessage = null) }
+    }
+
+    fun batchFixChatAndBankApps() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isFixingXiaomi = true, xiaomiProgress = null) }
+            val pm = context.packageManager
+            val installed = withContext(Dispatchers.IO) {
+                try {
+                    pm.getInstalledApplications(PackageManager.GET_META_DATA)
+                } catch (_: Exception) {
+                    emptyList()
+                }
+            }
+            val targets = installed.filter {
+                (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0 &&
+                        xiaomiFixManager.isChatOrBankApp(it.packageName, pm.getApplicationLabel(it).toString())
+            }.map {
+                Pair(it.packageName, pm.getApplicationLabel(it).toString())
+            }
+
+            if (targets.isEmpty()) {
+                _uiState.update { it.copy(isFixingXiaomi = false, xiaomiFixMessage = "Không tìm thấy ứng dụng Chat/Ngân hàng nào.") }
+                return@launch
+            }
+
+            _uiState.update { it.copy(xiaomiProgress = Pair(0, targets.size)) }
+            val (success, _) = xiaomiFixManager.batchFix(targets) { curr, total, _ ->
+                _uiState.update { it.copy(xiaomiProgress = Pair(curr, total)) }
+            }
+
+            _uiState.update {
+                it.copy(
+                    isFixingXiaomi = false,
+                    xiaomiProgress = null,
+                    xiaomiFixMessage = "⚡ Đã tối ưu thông báo cho $success/${targets.size} app Chat & Ngân hàng thành công!"
+                )
+            }
+        }
+    }
+
+    fun clearXiaomiFixMessage() {
+        _uiState.update { it.copy(xiaomiFixMessage = null) }
     }
 }

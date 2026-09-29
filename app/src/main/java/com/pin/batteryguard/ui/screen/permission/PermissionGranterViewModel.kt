@@ -22,6 +22,7 @@ import javax.inject.Inject
 
 enum class AppFilterCategory {
     AUTOMATION, // Tasker, MacroDroid, AutoApps, Automate,...
+    CHAT_AND_BANKING, // Zalo, Messenger, Telegram, Ngân hàng, Ví...
     USER_INSTALLED,
     ALL
 }
@@ -30,6 +31,7 @@ data class TargetAppInfo(
     val packageName: String,
     val appName: String,
     val isAutomationApp: Boolean,
+    val isChatOrBankApp: Boolean = false,
     val isSystem: Boolean,
     val isSelfApp: Boolean = false,
     val icon: Drawable? = null
@@ -55,13 +57,19 @@ data class PermissionGranterUiState(
     val showSelfGrantDialog: Boolean = false,
     val pendingSelfGrantBatch: Boolean = false,
     val pendingSelfPermission: AdvancedPermission? = null,
-    val pendingSelfEnable: Boolean? = null
+    val pendingSelfEnable: Boolean? = null,
+    val isXiaomiDevice: Boolean = false,
+    val isChinaRom: Boolean = false,
+    val selectedAppHasXiaomiSnapshot: Boolean = false,
+    val isXiaomiFixing: Boolean = false,
+    val batchProgress: Pair<Int, Int>? = null
 )
 
 @HiltViewModel
 class PermissionGranterViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val permissionManager: UniversalPermissionManager
+    private val permissionManager: UniversalPermissionManager,
+    private val xiaomiFixManager: com.pin.batteryguard.permission.XiaomiNotificationFixManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PermissionGranterUiState())
@@ -91,6 +99,12 @@ class PermissionGranterViewModel @Inject constructor(
     }
 
     init {
+        _uiState.update {
+            it.copy(
+                isXiaomiDevice = xiaomiFixManager.isXiaomiDevice(),
+                isChinaRom = xiaomiFixManager.isChinaRom()
+            )
+        }
         loadInstalledApps()
     }
 
@@ -106,6 +120,7 @@ class PermissionGranterViewModel @Inject constructor(
 
             val appList = installed.map { appInfo ->
                 val pkg = appInfo.packageName
+                val appName = PackageHelper.getAppName(context, pkg)
                 val isSystem = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
                 val isSelf = (pkg == context.packageName)
                 val isAutomation = isSelf || pkg in KNOWN_AUTOMATION_PACKAGES ||
@@ -113,16 +128,20 @@ class PermissionGranterViewModel @Inject constructor(
                         pkg.contains("macro", ignoreCase = true) ||
                         pkg.contains("automate", ignoreCase = true) ||
                         pkg.contains("autotool", ignoreCase = true)
+                val isChatOrBank = xiaomiFixManager.isChatOrBankApp(pkg, appName)
 
                 TargetAppInfo(
                     packageName = pkg,
-                    appName = PackageHelper.getAppName(context, pkg),
+                    appName = appName,
                     isAutomationApp = isAutomation,
+                    isChatOrBankApp = isChatOrBank,
                     isSystem = isSystem,
                     isSelfApp = isSelf,
                     icon = PackageHelper.getAppIcon(context, pkg)
                 )
-            }.sortedWith(compareByDescending<TargetAppInfo> { it.isAutomationApp }.thenBy { it.appName.lowercase() })
+            }.sortedWith(compareByDescending<TargetAppInfo> { it.isAutomationApp }
+                .thenByDescending { it.isChatOrBankApp }
+                .thenBy { it.appName.lowercase() })
 
             _uiState.update { state ->
                 state.copy(
@@ -156,6 +175,7 @@ class PermissionGranterViewModel @Inject constructor(
         val filtered = state.allApps.filter { app ->
             val matchCategory = when (state.activeCategory) {
                 AppFilterCategory.AUTOMATION -> app.isAutomationApp
+                AppFilterCategory.CHAT_AND_BANKING -> app.isChatOrBankApp
                 AppFilterCategory.USER_INSTALLED -> !app.isSystem
                 AppFilterCategory.ALL -> true
             }
@@ -170,6 +190,10 @@ class PermissionGranterViewModel @Inject constructor(
 
     fun selectApp(app: TargetAppInfo) {
         _uiState.update { it.copy(selectedApp = app) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val hasSnap = xiaomiFixManager.hasSnapshot(app.packageName)
+            _uiState.update { it.copy(selectedAppHasXiaomiSnapshot = hasSnap) }
+        }
         refreshPermissionsForSelectedApp()
     }
 
@@ -314,6 +338,64 @@ class PermissionGranterViewModel @Inject constructor(
                     statusFeedback = "✅ Hoàn tất: Đã cấp $successCount / ${eligible.size} quyền cho ${target.appName}!"
                 )
             }
+        }
+    }
+
+    fun fixXiaomiForSelectedApp() {
+        val target = _uiState.value.selectedApp ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(isXiaomiFixing = true) }
+            val result = xiaomiFixManager.fixNotification(target.packageName, target.appName)
+            _uiState.update {
+                it.copy(
+                    isXiaomiFixing = false,
+                    selectedAppHasXiaomiSnapshot = true,
+                    statusFeedback = result.getOrElse { err -> err.message ?: "Lỗi tối ưu thông báo" }
+                )
+            }
+            refreshPermissionsForSelectedApp()
+        }
+    }
+
+    fun restoreXiaomiForSelectedApp() {
+        val target = _uiState.value.selectedApp ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(isXiaomiFixing = true) }
+            val result = xiaomiFixManager.restoreNotification(target.packageName)
+            _uiState.update {
+                it.copy(
+                    isXiaomiFixing = false,
+                    selectedAppHasXiaomiSnapshot = false,
+                    statusFeedback = result.getOrElse { err -> err.message ?: "Lỗi khôi phục" }
+                )
+            }
+            refreshPermissionsForSelectedApp()
+        }
+    }
+
+    fun batchFixChatAndBankApps() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val targets = _uiState.value.allApps
+                .filter { it.isChatOrBankApp && !it.isSystem }
+                .map { Pair(it.packageName, it.appName) }
+
+            if (targets.isEmpty()) {
+                _uiState.update { it.copy(statusFeedback = "Không tìm thấy ứng dụng Chat/Ngân hàng nào cần sửa.") }
+                return@launch
+            }
+
+            _uiState.update { it.copy(isBatchProcessing = true, batchProgress = Pair(0, targets.size)) }
+            val (success, _) = xiaomiFixManager.batchFix(targets) { curr, total, _ ->
+                _uiState.update { it.copy(batchProgress = Pair(curr, total)) }
+            }
+            _uiState.update {
+                it.copy(
+                    isBatchProcessing = false,
+                    batchProgress = null,
+                    statusFeedback = "⚡ Đã tối ưu thông báo cho $success/${targets.size} ứng dụng Chat & Ngân hàng."
+                )
+            }
+            refreshPermissionsForSelectedApp()
         }
     }
 

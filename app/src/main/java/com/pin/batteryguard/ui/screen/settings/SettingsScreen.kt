@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Refresh
@@ -77,6 +78,13 @@ fun SettingsScreen(
 
     var showClearDialog by remember { mutableStateOf(false) }
     var periodMenuExpanded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(uiState.xiaomiFixMessage) {
+        uiState.xiaomiFixMessage?.let { msg ->
+            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+            viewModel.clearXiaomiFixMessage()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -326,6 +334,30 @@ fun SettingsScreen(
                         modifier = Modifier.weight(1f)
                     ) {
                         Text("Tiết kiệm pin", fontSize = 12.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = { viewModel.batchFixChatAndBankApps() },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !uiState.isFixingXiaomi,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    if (uiState.isFixingXiaomi) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        val progressText = uiState.xiaomiProgress?.let { " (${it.first}/${it.second})" } ?: ""
+                        Text("Đang tối ưu thông báo$progressText...", fontSize = 12.sp)
+                    } else {
+                        Icon(Icons.Filled.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("⚡ Sửa thông báo tất cả App Chat & Ngân hàng", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

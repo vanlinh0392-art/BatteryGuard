@@ -18,14 +18,28 @@ object XiaomiHelper {
     }
 
     fun isHyperOS(context: Context): Boolean {
+        val version = getSystemProperty("ro.mi.os.version.name")
+        return version.isNotEmpty()
+    }
+
+    fun getSystemProperty(key: String, default: String = ""): String {
         return try {
             val clazz = Class.forName("android.os.SystemProperties")
-            val method = clazz.getMethod("get", String::class.java)
-            val version = method.invoke(null, "ro.mi.os.version.name") as String
-            version.isNotEmpty()
-        } catch (e: Exception) {
-            false
+            val method = clazz.getMethod("get", String::class.java, String::class.java)
+            (method.invoke(null, key, default) as? String) ?: default
+        } catch (_: Exception) {
+            default
         }
+    }
+
+    fun isChinaRom(): Boolean {
+        if (!isXiaomi()) return false
+        val buildIncremental = getSystemProperty("ro.build.version.incremental")
+        if (buildIncremental.contains("CN", ignoreCase = true)) return true
+        val region = getSystemProperty("ro.miui.region")
+        if (region.equals("CN", ignoreCase = true)) return true
+        val vendorRegion = getSystemProperty("ro.vendor.miui.region")
+        return vendorRegion.equals("CN", ignoreCase = true)
     }
 
     fun openAutoStartSettings(context: Context) {
