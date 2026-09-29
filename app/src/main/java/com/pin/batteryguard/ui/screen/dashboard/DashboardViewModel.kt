@@ -38,6 +38,7 @@ data class DashboardUiState(
     val savedPercent: Float = 0f,
     val topDrainingApps: List<AppBatteryInfo> = emptyList(),
     val batteryHistory: List<com.pin.batteryguard.data.db.entity.BatteryLog> = emptyList(),
+    val recentForceStopLogs: List<com.pin.batteryguard.data.db.entity.ForceStopLog> = emptyList(),
     val isSetupCompleted: Boolean? = null
 )
 
@@ -194,7 +195,8 @@ class DashboardViewModel @Inject constructor(
                         batteryState = state,
                         batteryHistory = history,
                         stoppedToday = verifiedToday.size,
-                        savedPercent = savedPercent
+                        savedPercent = savedPercent,
+                        recentForceStopLogs = actionLogs.take(10)
                     )
                 }
             }.collect {}

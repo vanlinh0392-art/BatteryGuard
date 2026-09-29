@@ -64,7 +64,7 @@ val bottomNavItems = listOf(
     Screen.Dashboard,
     Screen.Apps,
     Screen.Automation,
-    Screen.History,
+    Screen.AppShield,
     Screen.Settings
 )
 

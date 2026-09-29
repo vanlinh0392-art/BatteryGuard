@@ -211,6 +211,33 @@ fun DashboardScreen(
             }
         }
 
+        // Lịch sử dừng ứng dụng
+        Text(
+            text = "Lịch sử dừng ứng dụng",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(top = 20.dp, bottom = 8.dp)
+        )
+        if (uiState.recentForceStopLogs.isNotEmpty()) {
+            uiState.recentForceStopLogs.forEach { log ->
+                ForceStopLogItem(log = log)
+            }
+        } else {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f)),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Filled.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text("Chưa có lịch sử dừng ứng dụng", fontSize = 12.sp)
+                }
+            }
+        }
+
         // Top ngốn pin section
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -255,5 +282,71 @@ fun DashboardScreen(
         }
         
         Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun ForceStopLogItem(log: com.pin.batteryguard.data.db.entity.ForceStopLog) {
+    val timeStr = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+        .format(java.util.Date(log.timestamp))
+    val dateStr = java.text.SimpleDateFormat("dd/MM", java.util.Locale.getDefault())
+        .format(java.util.Date(log.timestamp))
+    val actionLabel = if (log.action == "freeze") "Đóng băng" else "Dừng"
+    val statusColor = if (log.success) BatteryFull else BatteryLow
+    val statusText = if (log.success) "✓" else "✗"
+
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)
+        ),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Status indicator
+            Text(
+                text = statusText,
+                color = statusColor,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                modifier = Modifier.width(20.dp)
+            )
+            // App name + action
+            Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
+                Text(
+                    text = log.appName,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1
+                )
+                Text(
+                    text = "$actionLabel • ${log.reason.replace("_", " ")}",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    maxLines = 1
+                )
+            }
+            // Drain info
+            if (log.ratePercentPerHour > 0.0) {
+                Text(
+                    text = String.format("%.1f%%/h", log.ratePercentPerHour),
+                    fontSize = 11.sp,
+                    color = BatteryLow,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+            }
+            // Time
+            Column(horizontalAlignment = Alignment.End) {
+                Text(text = timeStr, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    text = dateStr,
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                )
+            }
+        }
     }
 }
