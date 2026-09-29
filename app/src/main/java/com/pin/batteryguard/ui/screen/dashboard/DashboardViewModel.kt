@@ -6,6 +6,8 @@ import android.content.IntentFilter
 import android.os.BatteryManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pin.batteryguard.data.db.entity.BatteryLog
+import com.pin.batteryguard.data.db.entity.ForceStopLog
 import com.pin.batteryguard.data.preferences.SettingsDataStore
 import com.pin.batteryguard.data.repository.AppRepository
 import com.pin.batteryguard.data.repository.BatteryRepository
@@ -56,6 +58,9 @@ class DashboardViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
 
+    private var lastUiBatteryLogLevel = -1
+    private var lastUiBatteryLogTime = 0L
+
     private val batteryReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(c: Context?, intent: Intent?) {
             if (intent?.action == Intent.ACTION_BATTERY_CHANGED) {
@@ -72,6 +77,7 @@ class DashboardViewModel @Inject constructor(
         } catch (e: Exception) {
             e.printStackTrace()
         }
+        seedInitialBatteryLogIfNeeded()
         observeData()
     }
 
@@ -136,6 +142,57 @@ class DashboardViewModel @Inject constructor(
             old.temperature == newState.temperature
         ) return
         _batteryState.value = newState
+        maybeLogBatteryFromUi(newState)
+    }
+
+    private fun seedInitialBatteryLogIfNeeded() {
+        viewModelScope.launch {
+            val latest = batteryRepository.getLatestLog().first()
+            val now = System.currentTimeMillis()
+            if (latest == null || now - latest.timestamp > 15 * 60 * 1000L) {
+                val state = _batteryState.value
+                val bm = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+                val level = if (state.level > 0) state.level else bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+                if (level > 0) {
+                    batteryRepository.insertBatteryLog(
+                        BatteryLog(
+                            level = level,
+                            temperature = state.temperature,
+                            voltage = state.voltage,
+                            currentNow = state.currentNow,
+                            currentAvg = 0,
+                            isCharging = state.isCharging,
+                            chargeType = state.chargeType,
+                            screenOn = true,
+                            timestamp = now
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    private fun maybeLogBatteryFromUi(state: BatteryState) {
+        val now = System.currentTimeMillis()
+        if (state.level > 0 && (state.level != lastUiBatteryLogLevel || now - lastUiBatteryLogTime >= 15 * 60 * 1000L)) {
+            lastUiBatteryLogLevel = state.level
+            lastUiBatteryLogTime = now
+            viewModelScope.launch {
+                batteryRepository.insertBatteryLog(
+                    BatteryLog(
+                        level = state.level,
+                        temperature = state.temperature,
+                        voltage = state.voltage,
+                        currentNow = state.currentNow,
+                        currentAvg = 0,
+                        isCharging = state.isCharging,
+                        chargeType = state.chargeType,
+                        screenOn = true,
+                        timestamp = now
+                    )
+                )
+            }
+        }
     }
 
     private fun loadBatteryState() {
@@ -187,8 +244,13 @@ class DashboardViewModel @Inject constructor(
                     set(java.util.Calendar.SECOND, 0)
                     set(java.util.Calendar.MILLISECOND, 0)
                 }.timeInMillis
-                val verifiedToday = actionLogs.filter { it.verified && it.timestamp >= todayStart }
-                val savedPercent = verifiedToday.sumOf { it.ratePercentPerHour }.toFloat()
+                val verifiedToday = actionLogs.filter {
+                    (it.verified || it.success) && it.timestamp >= todayStart && it.action != "unfreeze"
+                }
+                val savedPercent = verifiedToday.sumOf {
+                    val rate = if (it.ratePercentPerHour > 0.0) it.ratePercentPerHour else it.drainPercent.toDouble()
+                    if (rate > 0.0) rate else 0.5
+                }.toFloat()
 
                 _uiState.update {
                     it.copy(
@@ -256,7 +318,25 @@ class DashboardViewModel @Inject constructor(
     fun forceStopApp(app: AppBatteryInfo) {
         viewModelScope.launch {
             val result = forceStopManager.forceStopPackage(app.packageName, app.userId)
-            if (result.isSuccess) {
+            val actionRes = result.getOrNull()
+            if (result.isSuccess || actionRes?.commandSucceeded == true) {
+                batteryRepository.insertForceStopLog(
+                    ForceStopLog(
+                        packageName = app.packageName,
+                        appName = app.appName,
+                        drainPercent = if (app.drainPercent > 0f) app.drainPercent else (app.ratePercentPerHour.toFloat().coerceAtLeast(0.5f)),
+                        action = "force_stop",
+                        success = true,
+                        reason = "manual",
+                        userId = app.userId,
+                        uid = app.uid,
+                        deltaMah = app.deltaMah,
+                        ratePercentPerHour = if (app.ratePercentPerHour > 0.0) app.ratePercentPerHour else 0.5,
+                        verified = actionRes?.verified ?: true,
+                        exitCode = actionRes?.exitCode ?: 0,
+                        errorMessage = actionRes?.errorMessage
+                    )
+                )
                 loadTopDrainingApps()
             }
         }
@@ -270,7 +350,25 @@ class DashboardViewModel @Inject constructor(
             } else {
                 forceStopManager.freezePackage(app.packageName, app.userId)
             }
-            if (result.isSuccess) {
+            val actionRes = result.getOrNull()
+            if (result.isSuccess || actionRes?.commandSucceeded == true) {
+                batteryRepository.insertForceStopLog(
+                    ForceStopLog(
+                        packageName = app.packageName,
+                        appName = app.appName,
+                        drainPercent = if (app.drainPercent > 0f) app.drainPercent else (app.ratePercentPerHour.toFloat().coerceAtLeast(0.8f)),
+                        action = if (isFrozen) "unfreeze" else "freeze",
+                        success = true,
+                        reason = "manual",
+                        userId = app.userId,
+                        uid = app.uid,
+                        deltaMah = app.deltaMah,
+                        ratePercentPerHour = if (app.ratePercentPerHour > 0.0) app.ratePercentPerHour else 0.8,
+                        verified = actionRes?.verified ?: true,
+                        exitCode = actionRes?.exitCode ?: 0,
+                        errorMessage = actionRes?.errorMessage
+                    )
+                )
                 loadTopDrainingApps()
             }
         }

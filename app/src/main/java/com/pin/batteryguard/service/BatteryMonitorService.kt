@@ -73,6 +73,8 @@ class BatteryMonitorService : LifecycleService() {
     private var screenOnRestoreComplete = false
     private var lastBreachesBeforeClear: Map<Int, Int> = emptyMap()
     private var lastNotifiedBatteryLevel = -1
+    private var lastBatteryLogLevel = -1
+    private var lastBatteryLogTime = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -85,6 +87,10 @@ class BatteryMonitorService : LifecycleService() {
         registerReceivers()
         automationCoordinator.start(lifecycleScope)
         maybeCleanupOldData()
+
+        lifecycleScope.launch {
+            insertBatteryLog()
+        }
 
         lifecycleScope.launch {
             settingsDataStore.migrateIfNeeded()
@@ -140,6 +146,12 @@ class BatteryMonitorService : LifecycleService() {
                         lastNotifiedBatteryLevel = batteryPct
                         updateNotification(batteryPct)
                     }
+                    val now = System.currentTimeMillis()
+                    if (batteryPct != lastBatteryLogLevel || chargingChanged || (now - lastBatteryLogTime >= 15 * 60 * 1000L)) {
+                        lastBatteryLogLevel = batteryPct
+                        lastBatteryLogTime = now
+                        insertBatteryLog(level = batteryPct, temperature = temperature, charging = charging)
+                    }
                 }
             }
         )
@@ -171,6 +183,7 @@ class BatteryMonitorService : LifecycleService() {
     }
 
     private suspend fun handleScreenOff() {
+        insertBatteryLog()
         // Khôi phục cài đặt App Shield ngay khi khóa màn hình nếu người dùng bật tùy chọn này
         try {
             val shieldConfig = settingsDataStore.shieldConfigFlow.first()
@@ -189,6 +202,7 @@ class BatteryMonitorService : LifecycleService() {
     }
 
     private suspend fun handleScreenOn() {
+        insertBatteryLog()
         android.util.Log.i(TAG, "Screen on: ending drain session and restoring deep-sleep apps")
         cancelNextScan()
         lastBreachesBeforeClear = monitoringStateStore.load()?.consecutiveBreaches ?: emptyMap()
@@ -454,17 +468,37 @@ class BatteryMonitorService : LifecycleService() {
     private fun chargeCounterMovedBackwards(previous: Long?, current: Long?): Boolean =
         previous != null && current != null && current > previous + 1_000L
 
-    private suspend fun insertBatteryLog() {
+    private suspend fun insertBatteryLog(
+        level: Int = getBatteryLevelNow(),
+        temperature: Float = lastBatteryTemperature,
+        charging: Boolean = isCharging
+    ) {
+        val bm = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        val curNow = bm.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
+        val sticky = try {
+            registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        } catch (_: Exception) {
+            null
+        }
+        val volt = sticky?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) ?: 0
+        val chargePlug = sticky?.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1) ?: -1
+        val chargeType = when (chargePlug) {
+            BatteryManager.BATTERY_PLUGGED_AC -> "AC"
+            BatteryManager.BATTERY_PLUGGED_USB -> "USB"
+            BatteryManager.BATTERY_PLUGGED_WIRELESS -> "Wireless"
+            else -> if (charging) "Charging" else "None"
+        }
         batteryRepository.insertBatteryLog(
             BatteryLog(
-                level = getBatteryLevelNow(),
-                temperature = lastBatteryTemperature,
-                voltage = 0,
-                currentNow = 0,
+                level = level,
+                temperature = if (temperature > 0f) temperature else lastBatteryTemperature,
+                voltage = volt,
+                currentNow = curNow,
                 currentAvg = 0,
-                isCharging = isCharging,
-                chargeType = if (isCharging) "Charging" else "None",
-                screenOn = false
+                isCharging = charging,
+                chargeType = chargeType,
+                screenOn = pm.isInteractive
             )
         )
     }

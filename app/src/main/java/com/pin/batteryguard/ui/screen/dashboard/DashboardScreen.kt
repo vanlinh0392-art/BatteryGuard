@@ -186,7 +186,7 @@ fun DashboardScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Tiết kiệm ước tính", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                    Text(String.format("~%.1f%%", uiState.savedPercent), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = BatteryFull)
+                    Text(String.format(java.util.Locale.US, "~%.1f%%", uiState.savedPercent), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = BatteryFull)
                 }
             }
         }
@@ -198,18 +198,10 @@ fun DashboardScreen(
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
         )
-        if (uiState.batteryHistory.isNotEmpty()) {
-            BatteryChart(history = uiState.batteryHistory)
-        } else {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.Gray.copy(alpha = 0.05f)),
-                modifier = Modifier.fillMaxWidth().height(120.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Text("Đang thu thập dữ liệu", fontSize = 12.sp, color = Color.Gray)
-                }
-            }
-        }
+        BatteryChart(
+            history = uiState.batteryHistory,
+            currentState = uiState.batteryState
+        )
 
         // Lịch sử dừng ứng dụng
         Text(

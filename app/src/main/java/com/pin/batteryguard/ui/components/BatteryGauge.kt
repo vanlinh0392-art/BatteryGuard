@@ -102,7 +102,7 @@ fun BatteryGauge(
                 else -> BatteryFull
             }
             Text(
-                text = "${temperature}°C",
+                text = String.format(java.util.Locale.US, "%.1f°C", temperature),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = tempColor

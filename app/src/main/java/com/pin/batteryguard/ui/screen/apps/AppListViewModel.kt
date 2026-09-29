@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pin.batteryguard.data.db.entity.ForceStopLog
 import com.pin.batteryguard.data.repository.AppRepository
 import com.pin.batteryguard.data.repository.BatteryRepository
 import com.pin.batteryguard.domain.model.AppBatteryInfo
@@ -250,7 +251,25 @@ class AppListViewModel @Inject constructor(
     fun forceStopApp(app: AppBatteryInfo) {
         viewModelScope.launch {
             val result = forceStopManager.forceStopPackage(app.packageName, app.userId)
-            if (result.isSuccess) {
+            val actionRes = result.getOrNull()
+            if (result.isSuccess || actionRes?.commandSucceeded == true) {
+                batteryRepository.insertForceStopLog(
+                    ForceStopLog(
+                        packageName = app.packageName,
+                        appName = app.appName,
+                        drainPercent = if (app.drainPercent > 0f) app.drainPercent else (app.ratePercentPerHour.toFloat().coerceAtLeast(0.5f)),
+                        action = "force_stop",
+                        success = true,
+                        reason = "manual",
+                        userId = app.userId,
+                        uid = app.uid,
+                        deltaMah = app.deltaMah,
+                        ratePercentPerHour = if (app.ratePercentPerHour > 0.0) app.ratePercentPerHour else 0.5,
+                        verified = actionRes?.verified ?: true,
+                        exitCode = actionRes?.exitCode ?: 0,
+                        errorMessage = actionRes?.errorMessage
+                    )
+                )
                 _uiState.update { it.copy(actionResult = "Đã buộc dừng ${app.appName} (user ${app.userId})") }
                 loadApps()
             } else {
@@ -267,8 +286,25 @@ class AppListViewModel @Inject constructor(
             } else {
                 forceStopManager.freezePackage(app.packageName, app.userId)
             }
-
-            if (result.isSuccess) {
+            val actionRes = result.getOrNull()
+            if (result.isSuccess || actionRes?.commandSucceeded == true) {
+                batteryRepository.insertForceStopLog(
+                    ForceStopLog(
+                        packageName = app.packageName,
+                        appName = app.appName,
+                        drainPercent = if (app.drainPercent > 0f) app.drainPercent else (app.ratePercentPerHour.toFloat().coerceAtLeast(0.8f)),
+                        action = if (isFrozen) "unfreeze" else "freeze",
+                        success = true,
+                        reason = "manual",
+                        userId = app.userId,
+                        uid = app.uid,
+                        deltaMah = app.deltaMah,
+                        ratePercentPerHour = if (app.ratePercentPerHour > 0.0) app.ratePercentPerHour else 0.8,
+                        verified = actionRes?.verified ?: true,
+                        exitCode = actionRes?.exitCode ?: 0,
+                        errorMessage = actionRes?.errorMessage
+                    )
+                )
                 val msg = if (isFrozen) "Đã bỏ đóng băng" else "Đã đóng băng"
                 _uiState.update { it.copy(actionResult = "$msg ${app.appName} (user ${app.userId})") }
                 loadApps()
