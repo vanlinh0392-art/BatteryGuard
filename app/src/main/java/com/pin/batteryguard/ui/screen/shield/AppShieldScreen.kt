@@ -113,7 +113,7 @@ fun AppShieldScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Bảo vệ Ứng dụng & Ngân hàng", fontSize = 18.sp, fontWeight = FontWeight.Bold) },
+                title = { Text("Bảo vệ ứng dụng", fontSize = 18.sp, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Quay lại")
@@ -214,7 +214,7 @@ fun AppShieldScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = if (uiState.searchQuery.isNotBlank()) "Không tìm thấy ứng dụng '${uiState.searchQuery}'" else "Không có ứng dụng trong mục này",
+                            text = if (uiState.searchQuery.isNotBlank()) "Không tìm thấy '${uiState.searchQuery}'" else "Không có ứng dụng",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
@@ -270,14 +270,14 @@ private fun HeroProtectionCard(
 
     val statusTitle = when {
         !isEnabled -> "ĐÃ TẮT BẢO VỆ"
-        isHidden -> "ĐANG ẨN CÀI ĐẶT HỆ THỐNG"
-        else -> "BẢO VỆ TỰ ĐỘNG 24/7"
+        isHidden -> "ĐANG ẨN CÀI ĐẶT"
+        else -> "ĐANG TỰ BẢO VỆ"
     }
 
     val statusSubtitle = when {
-        !isEnabled -> "Bật công tắc để kích hoạt bảo vệ tàng hình khi mở ngân hàng"
-        isHidden -> "Đang che giấu Developer Options & ADB cho: ${uiState.triggeredPackage}"
-        else -> "Tự động ẩn Developer Options & ADB ngay khi mở app nhạy cảm"
+        !isEnabled -> "Bật để tự bảo vệ"
+        isHidden -> "Đang ẩn cho: ${uiState.triggeredPackage}"
+        else -> "Ẩn Dev/ADB khi mở"
     }
 
     Card(
@@ -311,7 +311,7 @@ private fun HeroProtectionCard(
                             statusSubtitle,
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                            maxLines = 2,
+                            maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
@@ -333,7 +333,7 @@ private fun HeroProtectionCard(
                 ) {
                     Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("⚡ Khôi phục cài đặt ngay", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("Khôi phục cài đặt", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
 
@@ -364,7 +364,7 @@ private fun HeroProtectionCard(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                "Tự nhận diện",
+                                "Tự động",
                                 fontSize = 9.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                                 maxLines = 1,
@@ -387,7 +387,7 @@ private fun HeroProtectionCard(
                         Spacer(modifier = Modifier.width(6.dp))
                         Column {
                             Text(
-                                "${uiState.manuallyShieldedCount} Chọn thêm",
+                                "${uiState.manuallyShieldedCount} App",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
@@ -427,7 +427,7 @@ private fun HeroProtectionCard(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            "Tự động nhận diện ngân hàng",
+                            "Tự nhận diện ngân hàng",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
                             maxLines = 1,
@@ -449,7 +449,7 @@ private fun HeroProtectionCard(
                     }
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        "Tự động bảo vệ hơn 60 app tài chính không cần tick tay",
+                        "Bảo vệ 60+ ngân hàng",
                         fontSize = 10.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         maxLines = 1,
@@ -476,11 +476,7 @@ private fun CompactPermissionBanner(
     onOpenAccessibility: () -> Unit,
     onOpenPermissionGranter: () -> Unit
 ) {
-    val message = when {
-        !hasSecure && !hasAccessibility -> "Thiếu quyền Secure Settings & Trợ năng"
-        !hasSecure -> "Thiếu quyền WRITE_SECURE_SETTINGS"
-        else -> "Chưa bật Dịch vụ Trợ năng AppShield"
-    }
+    val message = "Thiếu quyền hệ thống"
 
     Surface(
         color = BatteryLow.copy(alpha = 0.1f),
@@ -554,7 +550,7 @@ private fun AdvancedSettingsAccordion(
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Tùy chỉnh nâng cao", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        "${uiState.config.autoRevertMinutes} phút • ${if (uiState.config.revertOnScreenOff) "Khôi phục khi tắt màn hình" else "Đợi hết giờ"}",
+                        "${uiState.config.autoRevertMinutes}p • ${if (uiState.config.revertOnScreenOff) "Khôi phục khi tắt" else "Đợi hết giờ"}",
                         fontSize = 10.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         maxLines = 1,
@@ -575,7 +571,7 @@ private fun AdvancedSettingsAccordion(
             ) {
                 Column(modifier = Modifier.padding(top = 12.dp)) {
                     // 1. Hẹn giờ hoàn tác
-                    Text("HẸN GIỜ TỰ ĐỘNG BẬT LẠI", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text("HẸN GIỜ BẬT LẠI", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.height(4.dp))
                     Row(
                         modifier = Modifier
@@ -616,19 +612,19 @@ private fun AdvancedSettingsAccordion(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     // 2. Các công tắc hoạt động
-                    SettingSwitchRow("Bật lại ngay khi khóa màn hình", "Khôi phục khi tắt máy, không cần đợi hết giờ", uiState.config.revertOnScreenOff, onToggleScreenOff)
-                    SettingSwitchRow("Tự bật lại Shizuku sau khi khôi phục", "Khởi động Shizuku daemon qua ADB 5555", uiState.config.autoRestartShizuku, onToggleAutoShizuku)
-                    SettingSwitchRow("Đóng app trước khi ẩn (Relaunch)", "Xóa cache kiểm tra bảo mật của ngân hàng", uiState.config.relaunchApp, onToggleRelaunch)
+                    SettingSwitchRow("Bật lại khi khóa", "Khôi phục khi tắt màn", uiState.config.revertOnScreenOff, onToggleScreenOff)
+                    SettingSwitchRow("Tự bật lại Shizuku", "Kích hoạt qua ADB", uiState.config.autoRestartShizuku, onToggleAutoShizuku)
+                    SettingSwitchRow("Đóng app trước ẩn", "Xóa cache bảo mật", uiState.config.relaunchApp, onToggleRelaunch)
 
                     Spacer(modifier = Modifier.height(10.dp))
 
                     // 3. Phạm vi che giấu
                     Text("PHẠM VI CHE GIẤU", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.height(4.dp))
-                    SettingSwitchRow("Ẩn Tùy chọn nhà phát triển", null, uiState.config.hideDevOptions, onToggleDevOptions)
-                    SettingSwitchRow("Ẩn Gỡ lỗi USB (ADB Debugging)", null, uiState.config.hideAdb, onToggleAdb)
-                    SettingSwitchRow("Ẩn Gỡ lỗi không dây (Wireless Debugging)", null, uiState.config.hideWirelessAdb, onToggleWirelessAdb)
-                    SettingSwitchRow("Tạm thời lọc Dịch vụ Trợ năng khác", "Tránh app ngân hàng chặn vì Accessibility", uiState.config.hideAccessibility, onToggleAccessibility)
+                    SettingSwitchRow("Ẩn Tùy chọn phát triển", null, uiState.config.hideDevOptions, onToggleDevOptions)
+                    SettingSwitchRow("Ẩn Gỡ lỗi USB", null, uiState.config.hideAdb, onToggleAdb)
+                    SettingSwitchRow("Ẩn Gỡ lỗi không dây", null, uiState.config.hideWirelessAdb, onToggleWirelessAdb)
+                    SettingSwitchRow("Ẩn Dịch vụ Trợ năng", "Tránh ngân hàng chặn", uiState.config.hideAccessibility, onToggleAccessibility)
 
                     Spacer(modifier = Modifier.height(10.dp))
 
@@ -638,7 +634,7 @@ private fun AdvancedSettingsAccordion(
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth().height(38.dp)
                     ) {
-                        Text("🛡️ Ẩn thử nghiệm (Test Shield)", fontSize = 11.sp)
+                        Text("Thử ẩn ngay", fontSize = 11.sp)
                     }
                 }
             }
@@ -703,7 +699,7 @@ private fun AppFilterSection(
         OutlinedTextField(
             value = searchQuery,
             onValueChange = onSearchQueryChanged,
-            placeholder = { Text("Tìm ứng dụng hoặc package...", fontSize = 12.sp) },
+            placeholder = { Text("Tìm ứng dụng...", fontSize = 12.sp) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
             trailingIcon = {
                 if (searchQuery.isNotBlank()) {

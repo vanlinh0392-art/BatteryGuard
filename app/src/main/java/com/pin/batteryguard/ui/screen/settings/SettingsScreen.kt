@@ -93,7 +93,7 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp)
         ) {
             // Section 1: Giám sát
-            Text("GIÁM SÁT", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
+            Text("GIÁM SÁT PIN", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
             
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -101,7 +101,7 @@ fun SettingsScreen(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Bật giám sát", fontWeight = FontWeight.SemiBold)
-                    Text("Tự động quét khi tắt màn hình", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Text("Quét khi tắt màn", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 }
                 Switch(
                     checked = uiState.config.isMonitoringEnabled,
@@ -112,11 +112,11 @@ fun SettingsScreen(
             // Slider: Threshold % pin
             Column(modifier = Modifier.padding(vertical = 8.dp)) {
                 Text(
-                    text = String.format("Ngưỡng force-stop: %.2f%% dung lượng/giờ", uiState.config.drainThresholdPercent),
+                    text = String.format("Ngưỡng dừng: %.2f%%/h", uiState.config.drainThresholdPercent),
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = "App vượt ngưỡng này sẽ bị dừng ngay ở lần quét đầu tiên",
+                    text = "Dừng app vượt ngưỡng",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
@@ -131,7 +131,7 @@ fun SettingsScreen(
                     steps = 46
                 )
                 Text(
-                    "Khuyến nghị: 1,0%/giờ. Đặt thấp hơn để bắt app ngốn pin ẩn; cao hơn để giảm false-positive.",
+                    "Khuyến nghị: 1.0%/h",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
                 )
@@ -144,7 +144,7 @@ fun SettingsScreen(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Chu kỳ quét", fontWeight = FontWeight.SemiBold)
-                    Text("Tần suất quét pin khi màn tắt", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Text("Tần suất quét ngầm", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 }
                 
                 ExposedDropdownMenuBox(
@@ -182,8 +182,8 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Tự động dừng ứng dụng", fontWeight = FontWeight.SemiBold)
-                    Text("Dừng ngay app ngốn pin thay vì chỉ cảnh báo", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Text("Tự động dừng app", fontWeight = FontWeight.SemiBold)
+                    Text("Dừng thay vì cảnh báo", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 }
                 Switch(
                     checked = uiState.config.autoForceStop,
@@ -196,8 +196,8 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Hiển thị thông báo", fontWeight = FontWeight.SemiBold)
-                    Text("Thông báo tổng hợp khi dừng app", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Text("Hiện thông báo", fontWeight = FontWeight.SemiBold)
+                    Text("Báo cáo khi dừng", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 }
                 Switch(
                     checked = uiState.config.notifyBeforeStop,
@@ -212,7 +212,7 @@ fun SettingsScreen(
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Ẩn app hệ thống", fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Không hiển thị app hệ thống trong tab Ứng dụng (mặc định bật)",
+                        "Chỉ hiện app cài",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
@@ -227,7 +227,7 @@ fun SettingsScreen(
 
             // Section 2: Chế độ xử lý (Force Stop vs Freeze)
             Spacer(modifier = Modifier.height(12.dp))
-            Text("CHẾ ĐỘ XỬ LÝ APP NGỐN PIN", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
+            Text("CHẾ ĐỘ XỬ LÝ", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
             
             Column {
                 Row(
@@ -242,8 +242,8 @@ fun SettingsScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Column {
-                        Text("Chỉ Force Stop", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                        Text("App vượt ngưỡng được dừng nhưng không tự động đưa vào Deep Sleep", fontSize = 11.sp, color = Color.Gray)
+                        Text("Chỉ dừng app", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        Text("Không đóng băng ngầm", fontSize = 11.sp, color = Color.Gray)
                     }
                 }
                 Row(
@@ -258,8 +258,8 @@ fun SettingsScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Column {
-                        Text("Freeze app tái phạm", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                        Text("Chỉ freeze sau 2 lần force-stop đã xác minh trong 3 giờ", fontSize = 11.sp, color = Color.Gray)
+                        Text("Đóng băng tái phạm", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        Text("Đóng băng khi lặp", fontSize = 11.sp, color = Color.Gray)
                     }
                 }
             }
@@ -288,12 +288,12 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Trình cấp quyền nâng cao",
+                            text = "Trình cấp quyền",
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp
                         )
                         Text(
-                            text = "Cấp quyền 1-chạm cho Tasker, MacroDroid & mọi ứng dụng qua ADB/Shizuku",
+                            text = "Cấp quyền qua Shizuku",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
@@ -309,7 +309,7 @@ fun SettingsScreen(
             // Section 4: Xiaomi settings (Chỉ hiện nếu là máy Xiaomi)
             if (uiState.isXiaomi) {
                 Spacer(modifier = Modifier.height(12.dp))
-                Text("CÀI ĐẶT XIAOMI / HYPEROS", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
+                Text("CÀI ĐẶT XIAOMI", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
                 
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Button(
@@ -346,7 +346,7 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column {
-                            Text("Phiên bản hiện tại", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Phiên bản", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                             Text("v${uiState.appVersion}", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         }
 
@@ -388,19 +388,19 @@ fun SettingsScreen(
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Xóa toàn bộ dữ liệu lịch sử")
+                Text("Xóa lịch sử dữ liệu")
             }
 
             Spacer(modifier = Modifier.height(8.dp))
             Button(
                 onClick = {
                     viewModel.clearFrozenApps()
-                    android.widget.Toast.makeText(context, "Đã rã băng tất cả và xóa danh sách!", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(context, "Đã rã băng tất cả!", android.widget.Toast.LENGTH_SHORT).show()
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Giải phóng các app đang đóng băng ngầm")
+                Text("Rã băng toàn bộ app")
             }
 
             // Reset Setup button (để debug/chạy lại setup wizard)
@@ -411,7 +411,7 @@ fun SettingsScreen(
                 },
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
             ) {
-                Text("Chạy lại hướng dẫn cấu hình ban đầu", fontSize = 12.sp)
+                Text("Chạy lại hướng dẫn", fontSize = 12.sp)
             }
 
             Spacer(modifier = Modifier.height(32.dp))

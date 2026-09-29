@@ -107,9 +107,10 @@ fun AppUsageCard(
                         }
                     }
                     Text(
-                        text = "${appInfo.packageName} · user ${appInfo.userId} · UID ${appInfo.uid}",
+                        text = appInfo.packageName,
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        maxLines = 1
                     )
                 }
 
@@ -126,7 +127,7 @@ fun AppUsageCard(
 
             if (appInfo.decision.contains("active_use") && !appInfo.activeUseOverride) {
                 OutlinedButton(onClick = onAllowActiveUseStop, modifier = Modifier.fillMaxWidth()) {
-                    Text("Cho phép tự dừng app này dù có foreground service", fontSize = 11.sp)
+                    Text("Cho phép tự dừng", fontSize = 11.sp)
                 }
                 Spacer(modifier = Modifier.height(8.dp))
             }
@@ -142,7 +143,7 @@ fun AppUsageCard(
             Spacer(modifier = Modifier.height(10.dp))
 
             Text(
-                text = String.format("Delta %.2f mAh · %s", appInfo.deltaMah, appInfo.decision.ifBlank { "recorded" }),
+                text = String.format("Tiêu hao: %.1f mAh", appInfo.deltaMah),
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
@@ -150,7 +151,8 @@ fun AppUsageCard(
                 Text(
                     text = appInfo.evidence,
                     fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    maxLines = 1
                 )
             }
 
@@ -164,7 +166,7 @@ fun AppUsageCard(
                 val backTimeText = formatDuration(appInfo.backgroundTimeMs)
                 
                 Text(
-                    text = "Màn hình: $foreTimeText | Ngầm: $backTimeText",
+                    text = "Bật: $foreTimeText • Ngầm: $backTimeText",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )

@@ -97,7 +97,7 @@ fun AutomationScreen(
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                         )
                         Text(
-                            text = "Kích hoạt & Quy tắc thông minh",
+                            text = "Quy tắc tự động",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -149,7 +149,7 @@ fun AutomationScreen(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "MODULES CÓ SẴN",
+                            text = "DANH SÁCH QUY TẮC",
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.5.sp
@@ -241,7 +241,7 @@ fun AutomationScreen(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Mẹo: Bạn có thể bấm vào 'Cấu hình' ở từng thẻ để tùy chỉnh ngưỡng pin, độ trễ và chế độ chuyển đổi theo nhu cầu cá nhân.",
+                            text = "Chạm thẻ để chỉnh",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -330,7 +330,7 @@ fun CompactMasterControlCard(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Tự động hóa tổng",
+                        text = "Tổng điều khiển",
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp
@@ -343,7 +343,7 @@ fun CompactMasterControlCard(
                         color = if (isMasterEnabled) Green80.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceContainerHighest
                     ) {
                         Text(
-                            text = if (isMasterEnabled) "$activeCount/$totalCount đang chạy" else "Đã tắt",
+                            text = if (isMasterEnabled) "Chạy: $activeCount/$totalCount" else "Đã tắt",
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
                             color = if (isMasterEnabled) Green80 else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)

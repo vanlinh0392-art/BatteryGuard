@@ -123,8 +123,8 @@ class AutomationViewModel @Inject constructor(
         val rules = listOf(
             AutomationRuleUiModel(
                 id = AutomationRuleId.WIFI_AUTO_DATA,
-                title = "Tắt 4G khi có Wi-Fi",
-                subtitle = "Tự ngắt dữ liệu mạng di động khi Wi-Fi ổn định",
+                title = "Tắt 4G có Wi-Fi",
+                subtitle = "Ngắt 4G khi Wi-Fi",
                 icon = Icons.Filled.Wifi,
                 isEnabled = config.wifiAutoDataEnabled,
                 activeStatus = if (!config.isMasterEnabled || !config.wifiAutoDataEnabled) RuleActiveStatus.DISABLED
@@ -132,13 +132,13 @@ class AutomationViewModel @Inject constructor(
                 statusBadgeText = if (!config.isMasterEnabled || !config.wifiAutoDataEnabled) "Đã tắt"
                 else runtimeStates[AutomationRuleId.WIFI_AUTO_DATA]?.badgeText ?: "Sẵn sàng",
                 statusDetail = if (!config.isMasterEnabled || !config.wifiAutoDataEnabled) "Đã tắt"
-                else runtimeStates[AutomationRuleId.WIFI_AUTO_DATA]?.detailText ?: "SIM: ${config.wifiAutoDataParams.targetSim.name}",
+                else runtimeStates[AutomationRuleId.WIFI_AUTO_DATA]?.detailText ?: "Dùng Wi-Fi • SIM ${config.wifiAutoDataParams.targetSim.name}",
                 params = config.wifiAutoDataParams
             ),
             AutomationRuleUiModel(
                 id = AutomationRuleId.DAY_NIGHT_RINGER,
-                title = "Chuyển chuông theo giờ",
-                subtitle = "Tự động chuyển Rung / Im lặng ban đêm",
+                title = "Chuông ngày và đêm",
+                subtitle = "Rung hoặc im đêm",
                 icon = Icons.Filled.NotificationsActive,
                 isEnabled = config.dayNightRingerEnabled,
                 activeStatus = if (!config.isMasterEnabled || !config.dayNightRingerEnabled) RuleActiveStatus.DISABLED
@@ -146,13 +146,13 @@ class AutomationViewModel @Inject constructor(
                 statusBadgeText = if (!config.isMasterEnabled || !config.dayNightRingerEnabled) "Đã tắt"
                 else runtimeStates[AutomationRuleId.DAY_NIGHT_RINGER]?.badgeText ?: "Sẵn sàng",
                 statusDetail = if (!config.isMasterEnabled || !config.dayNightRingerEnabled) "Đã tắt"
-                else runtimeStates[AutomationRuleId.DAY_NIGHT_RINGER]?.detailText ?: "Khung giờ: ${String.format("%02d:%02d", config.dayNightRingerParams.startHour, config.dayNightRingerParams.startMinute)} - ${String.format("%02d:%02d", config.dayNightRingerParams.endHour, config.dayNightRingerParams.endMinute)}",
+                else runtimeStates[AutomationRuleId.DAY_NIGHT_RINGER]?.detailText ?: "Đêm: ${String.format("%02d:%02d", config.dayNightRingerParams.startHour, config.dayNightRingerParams.startMinute)} - ${String.format("%02d:%02d", config.dayNightRingerParams.endHour, config.dayNightRingerParams.endMinute)}",
                 params = config.dayNightRingerParams
             ),
             AutomationRuleUiModel(
                 id = AutomationRuleId.OVERNIGHT_CHARGING,
-                title = "Bảo vệ pin sạc qua đêm",
-                subtitle = "Cảnh báo ngắt sạc khi pin đạt ngưỡng an toàn",
+                title = "Bảo vệ sạc đêm",
+                subtitle = "Báo ngắt sạc pin",
                 icon = Icons.Filled.BatteryChargingFull,
                 isEnabled = config.overnightChargingEnabled,
                 activeStatus = if (!config.isMasterEnabled || !config.overnightChargingEnabled) RuleActiveStatus.DISABLED
@@ -160,13 +160,13 @@ class AutomationViewModel @Inject constructor(
                 statusBadgeText = if (!config.isMasterEnabled || !config.overnightChargingEnabled) "Đã tắt"
                 else runtimeStates[AutomationRuleId.OVERNIGHT_CHARGING]?.badgeText ?: "Sẵn sàng",
                 statusDetail = if (!config.isMasterEnabled || !config.overnightChargingEnabled) "Đã tắt"
-                else runtimeStates[AutomationRuleId.OVERNIGHT_CHARGING]?.detailText ?: "Giới hạn khuyến nghị: ${config.overnightChargingParams.maxChargeLimitPercent}%",
+                else runtimeStates[AutomationRuleId.OVERNIGHT_CHARGING]?.detailText ?: "Ngưỡng sạc: ${config.overnightChargingParams.maxChargeLimitPercent}%",
                 params = config.overnightChargingParams
             ),
             AutomationRuleUiModel(
                 id = AutomationRuleId.LOW_BATTERY_SAVER,
-                title = "Tiết kiệm pin khi pin yếu",
-                subtitle = "Tự bật Tiết kiệm pin & hạ màn hình 60Hz",
+                title = "Tiết kiệm pin yếu",
+                subtitle = "Bật tiết kiệm & 60Hz",
                 icon = Icons.Filled.BatterySaver,
                 isEnabled = config.lowBatterySaverEnabled,
                 activeStatus = if (!config.isMasterEnabled || !config.lowBatterySaverEnabled) RuleActiveStatus.DISABLED
@@ -174,13 +174,13 @@ class AutomationViewModel @Inject constructor(
                 statusBadgeText = if (!config.isMasterEnabled || !config.lowBatterySaverEnabled) "Đã tắt"
                 else runtimeStates[AutomationRuleId.LOW_BATTERY_SAVER]?.badgeText ?: "Sẵn sàng",
                 statusDetail = if (!config.isMasterEnabled || !config.lowBatterySaverEnabled) "Đã tắt"
-                else runtimeStates[AutomationRuleId.LOW_BATTERY_SAVER]?.detailText ?: "Kích hoạt khi pin ≤ ${config.lowBatterySaverParams.thresholdPercent}%",
+                else runtimeStates[AutomationRuleId.LOW_BATTERY_SAVER]?.detailText ?: "Kích hoạt: ≤ ${config.lowBatterySaverParams.thresholdPercent}%",
                 params = config.lowBatterySaverParams
             ),
             AutomationRuleUiModel(
                 id = AutomationRuleId.DEEP_SCREEN_OFF,
-                title = "Tối ưu sâu khi tắt màn hình",
-                subtitle = "Kích hoạt Deep Doze sớm sau khi khoá máy",
+                title = "Tối ưu tắt màn",
+                subtitle = "Doze sâu khi khóa",
                 icon = Icons.Filled.ScreenLockPortrait,
                 isEnabled = config.deepScreenOffEnabled,
                 activeStatus = if (!config.isMasterEnabled || !config.deepScreenOffEnabled) RuleActiveStatus.DISABLED
@@ -188,7 +188,7 @@ class AutomationViewModel @Inject constructor(
                 statusBadgeText = if (!config.isMasterEnabled || !config.deepScreenOffEnabled) "Đã tắt"
                 else runtimeStates[AutomationRuleId.DEEP_SCREEN_OFF]?.badgeText ?: "Sẵn sàng",
                 statusDetail = if (!config.isMasterEnabled || !config.deepScreenOffEnabled) "Đã tắt"
-                else runtimeStates[AutomationRuleId.DEEP_SCREEN_OFF]?.detailText ?: "Kích hoạt sau ${config.deepScreenOffParams.delayMinutes} phút tắt màn hình",
+                else runtimeStates[AutomationRuleId.DEEP_SCREEN_OFF]?.detailText ?: "Kích hoạt sau ${config.deepScreenOffParams.delayMinutes}p",
                 params = config.deepScreenOffParams
             )
         )

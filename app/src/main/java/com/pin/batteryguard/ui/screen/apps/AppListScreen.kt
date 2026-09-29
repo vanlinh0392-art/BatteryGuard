@@ -89,7 +89,7 @@ fun AppListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Mức tiêu thụ của ứng dụng", fontSize = 20.sp) },
+                title = { Text("Tiêu thụ pin app", fontSize = 20.sp) },
                 actions = {
                     IconButton(onClick = { viewModel.loadApps() }) {
                         Icon(Icons.Filled.Refresh, contentDescription = "Tải lại")
@@ -115,7 +115,7 @@ fun AppListScreen(
                     OutlinedTextField(
                         value = uiState.searchQuery,
                         onValueChange = { viewModel.onSearchQueryChanged(it) },
-                        placeholder = { Text("Tìm tên hoặc package app...") },
+                        placeholder = { Text("Tìm ứng dụng...") },
                         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = "Tìm kiếm") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
@@ -168,7 +168,7 @@ fun AppListScreen(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    Text("Không tìm thấy ứng dụng phù hợp.", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                    Text("Không tìm thấy app", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                 }
             } else {
                 LazyColumn(

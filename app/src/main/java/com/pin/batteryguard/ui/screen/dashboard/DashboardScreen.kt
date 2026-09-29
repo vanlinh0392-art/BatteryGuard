@@ -97,8 +97,8 @@ fun DashboardScreen(
             // Chỉ báo trạng thái Shizuku
             val statusColor = if (uiState.shizukuStatus == ShizukuStatus.READY) BatteryFull else BatteryLow
             val statusLabel = when (uiState.shizukuStatus) {
-                ShizukuStatus.READY -> "Shizuku Sẵn sàng"
-                else -> "Shizuku Chưa kết nối"
+                ShizukuStatus.READY -> "Shizuku: Sẵn sàng"
+                else -> "Shizuku: Chưa kết nối"
             }
             
             Row(
@@ -149,12 +149,12 @@ fun DashboardScreen(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (uiState.isMonitoring) "Đang tự động giám sát" else "Đang tạm dừng giám sát",
+                        text = if (uiState.isMonitoring) "Tự động giám sát" else "Tạm dừng giám sát",
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp
                     )
                     Text(
-                        text = "Quét & force stop app ngốn pin khi màn khóa",
+                        text = "Quét khi khóa máy",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
@@ -176,7 +176,7 @@ fun DashboardScreen(
                 modifier = Modifier.weight(1f)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Đã dừng hôm nay", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Text("Dừng hôm nay", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                     Text("${uiState.stoppedToday} apps", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 }
             }
@@ -185,7 +185,7 @@ fun DashboardScreen(
                 modifier = Modifier.weight(1f)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Ước tính tiết kiệm", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Text("Tiết kiệm ước tính", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                     Text(String.format("~%.1f%%", uiState.savedPercent), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = BatteryFull)
                 }
             }
@@ -193,7 +193,7 @@ fun DashboardScreen(
 
         // Lịch sử đồ thị pin 24h
         Text(
-            text = "Lịch sử pin 24h qua",
+            text = "Lịch sử pin 24h",
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
@@ -206,14 +206,14 @@ fun DashboardScreen(
                 modifier = Modifier.fillMaxWidth().height(120.dp)
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Text("Đang tích lũy dữ liệu...", fontSize = 12.sp, color = Color.Gray)
+                    Text("Đang thu thập dữ liệu", fontSize = 12.sp, color = Color.Gray)
                 }
             }
         }
 
         // Lịch sử dừng ứng dụng
         Text(
-            text = "Lịch sử dừng ứng dụng",
+            text = "Lịch sử dừng app",
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(top = 20.dp, bottom = 8.dp)
@@ -233,7 +233,7 @@ fun DashboardScreen(
                 ) {
                     Icon(Icons.Filled.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text("Chưa có lịch sử dừng ứng dụng", fontSize = 12.sp)
+                    Text("Chưa có lịch sử", fontSize = 12.sp)
                 }
             }
         }
@@ -247,7 +247,7 @@ fun DashboardScreen(
                 .clickable { onNavigateToApps() }
         ) {
             Text(
-                text = "Ứng dụng ngốn pin nhiều nhất",
+                text = "App ngốn pin nhất",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -276,7 +276,7 @@ fun DashboardScreen(
                 ) {
                     Icon(Icons.Filled.Info, contentDescription = "Info", tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text("Không có dữ liệu tiêu thụ. Thiết bị của bạn rất tiết kiệm pin!", fontSize = 12.sp)
+                    Text("Không có app ngốn pin", fontSize = 12.sp)
                 }
             }
         }
@@ -321,8 +321,9 @@ private fun ForceStopLogItem(log: com.pin.batteryguard.data.db.entity.ForceStopL
                     fontWeight = FontWeight.Medium,
                     maxLines = 1
                 )
+                val reasonLabel = if (log.reason.contains("manual")) "Thủ công" else "Tự động"
                 Text(
-                    text = "$actionLabel • ${log.reason.replace("_", " ")}",
+                    text = "$actionLabel • $reasonLabel",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                     maxLines = 1
