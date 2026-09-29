@@ -58,6 +58,9 @@ class BatteryRepository @Inject constructor(
     suspend fun isActiveUseStopAllowed(packageName: String, userId: Int): Boolean =
         appPolicyOverrideDao.isActiveUseStopAllowed(userId, packageName) ?: false
 
+    suspend fun getAllActiveUseOverrides(): Map<String, Boolean> =
+        appPolicyOverrideDao.getAll().associate { "${it.userId}:${it.packageName}" to it.allowActiveUseStop }
+
     suspend fun setActiveUseStopAllowed(packageName: String, userId: Int, allowed: Boolean) =
         appPolicyOverrideDao.upsert(AppPolicyOverride(userId, packageName, allowed))
 

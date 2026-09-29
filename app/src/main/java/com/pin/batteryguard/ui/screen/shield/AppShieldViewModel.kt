@@ -75,6 +75,7 @@ class AppShieldViewModel @Inject constructor(
 
     private val searchQueryFlow = MutableStateFlow("")
     private val filterTabFlow = MutableStateFlow(AppShieldFilterTab.ALL)
+    private var cachedInstalledUserApps: List<Pair<String, String>>? = null
 
     init {
         refreshPermissions()
@@ -268,15 +269,23 @@ class AppShieldViewModel @Inject constructor(
     }
 
     private suspend fun loadAllInstalledUserApps(): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+        val cached = cachedInstalledUserApps
+        if (cached != null) return@withContext cached
         val pm = context.packageManager
         val installed = pm.getInstalledApplications(PackageManager.GET_META_DATA)
-        installed
+        val list = installed
             .filter { (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0 || isLikelyBankApp(it.packageName, "") }
             .filter { it.packageName != context.packageName }
             .map { appInfo ->
                 val label = pm.getApplicationLabel(appInfo).toString()
                 Pair(appInfo.packageName, label)
             }
+        cachedInstalledUserApps = list
+        list
+    }
+
+    fun invalidateAppListCache() {
+        cachedInstalledUserApps = null
     }
 
     private fun isLikelyBankApp(packageName: String, label: String): Boolean {

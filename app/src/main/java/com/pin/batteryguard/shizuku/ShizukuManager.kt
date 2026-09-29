@@ -181,18 +181,18 @@ class ShizukuManager @Inject constructor(
      * 3. Slow-path: pingBinder() trực tiếp + thử toggle Wireless Debugging nếu có quyền WRITE_SECURE_SETTINGS
      */
     suspend fun ensureReady(): Boolean {
-        // Tầng 1: Fast-path
-        if (isReady()) {
-            cachedReadyResult = true
-            cachedReadyTime = System.currentTimeMillis()
-            return true
-        }
-
         val now = System.currentTimeMillis()
 
-        // Tầng 2: Cache hit
+        // Tầng 1: Cache hit trong 30 giây (0ms, hoàn toàn không gọi Binder IPC)
         if (now - cachedReadyTime < CACHE_TTL_MS) {
             return cachedReadyResult
+        }
+
+        // Tầng 2: Fast-path nếu status trong RAM là READY và ping sống
+        if (isReady()) {
+            cachedReadyResult = true
+            cachedReadyTime = now
+            return true
         }
 
         // Tầng 3: Ping trực tiếp

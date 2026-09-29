@@ -85,17 +85,21 @@ class AppListViewModel @Inject constructor(
                     .getOrDefault(emptySet())
             }
 
+            val activeUseOverrides = runSuspendCatching { batteryRepository.getAllActiveUseOverrides() }
+                .getOrDefault(emptyMap())
+
             for (uidInfo in resolved.values.sortedWith(compareBy({ it.userId }, { it.primaryPackage ?: "" }))) {
                 for (packageName in uidInfo.packageNames) {
                     if (config.excludeSystemApps && PackageHelper.isSystemApp(context, packageName)) continue
                     // A single stale package or binder error should not
-                        // prevent all other apps from being rendered.
-                        buildResolvedApp(
-                            uidInfo,
+                    // prevent all other apps from being rendered.
+                    buildResolvedApp(
+                        uidInfo,
                         packageName,
                         latestByUid,
                         exceptionPackages,
-                        frozenByUser[uidInfo.userId].orEmpty()
+                        frozenByUser[uidInfo.userId].orEmpty(),
+                        activeUseOverrides
                     )?.let(mappedList::add)
                 }
             }
@@ -131,11 +135,12 @@ class AppListViewModel @Inject constructor(
         packageName: String,
         latestByUid: Map<String, com.pin.batteryguard.data.db.entity.AppUsageLog>,
         exceptionPackages: List<String>,
-        frozenPackages: Set<String>
+        frozenPackages: Set<String>,
+        activeUseOverrides: Map<String, Boolean>
     ): AppBatteryInfo? {
         return try {
             val log = if (!uidInfo.isShared) latestByUid["${uidInfo.userId}:${uidInfo.uid}"] else null
-            val activeUseOverride = batteryRepository.isActiveUseStopAllowed(packageName, uidInfo.userId)
+            val activeUseOverride = activeUseOverrides["${uidInfo.userId}:$packageName"] ?: false
             val isSystem = PackageHelper.isSystemApp(context, packageName)
             AppBatteryInfo(
                 packageName = packageName,

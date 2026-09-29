@@ -11,6 +11,9 @@ interface AppPolicyOverrideDao {
     @Query("SELECT allowActiveUseStop FROM app_policy_overrides WHERE userId = :userId AND packageName = :packageName LIMIT 1")
     suspend fun isActiveUseStopAllowed(userId: Int, packageName: String): Boolean?
 
+    @Query("SELECT * FROM app_policy_overrides")
+    suspend fun getAll(): List<AppPolicyOverride>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(override: AppPolicyOverride)
 }
