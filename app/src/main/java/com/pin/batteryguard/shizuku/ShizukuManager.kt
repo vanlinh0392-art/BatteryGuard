@@ -213,8 +213,28 @@ class ShizukuManager @Inject constructor(
         // Thử kích hoạt lại Shizuku qua toggle Wireless Debugging
         // Chỉ thử nếu ngoài cooldown và có quyền WRITE_SECURE_SETTINGS
         if (now - lastReconnectAttemptTime > RECONNECT_COOLDOWN_MS) {
-            if (tryToggleWirelessDebugging()) {
-                // Đợi Shizuku tự khởi động lại (tối đa 4 giây)
+            // Fix: Tự bật WD khi đang TẮT (trước đây chỉ toggle khi đang BẬT)
+            if (!isWirelessDebuggingEnabled() && hasWriteSecureSettings()) {
+                lastReconnectAttemptTime = System.currentTimeMillis()
+                android.util.Log.d("ShizukuManager", "📡 WD đang TẮT → tự bật WD + khởi động Shizuku...")
+                enableWirelessDebugging()
+                delay(2000)
+                autoStarter.startShizukuService(notifyOnSuccess = true, isManual = false)
+                delay(3000)
+                try {
+                    if (Shizuku.pingBinder()) {
+                        updateStatus()
+                        if (isReady()) {
+                            android.util.Log.d("ShizukuManager", "✅ Shizuku đã READY sau auto-enable WD!")
+                            cachedReadyResult = true
+                            cachedReadyTime = System.currentTimeMillis()
+                            return true
+                        }
+                    }
+                } catch (_: Exception) {}
+                android.util.Log.w("ShizukuManager", "⏳ Auto-enable WD xong nhưng Shizuku chưa sống lại")
+            } else if (tryToggleWirelessDebugging()) {
+                // WD đang BẬT nhưng Shizuku chết → toggle OFF→ON
                 val startTime = System.currentTimeMillis()
                 while (System.currentTimeMillis() - startTime < 4000L) {
                     delay(500)
