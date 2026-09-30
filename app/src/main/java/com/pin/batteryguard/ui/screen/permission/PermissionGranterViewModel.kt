@@ -14,6 +14,7 @@ import com.pin.batteryguard.util.PackageHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -290,7 +291,20 @@ class PermissionGranterViewModel @Inject constructor(
             }
 
             val (success, message) = permissionManager.togglePermission(target.packageName, item, enable)
-            refreshPermissionsForSelectedApp()
+
+            if (success) {
+                // Cập nhật Optimistic tức thì để UI switch nhảy ngay lập tức không bị giật lùi
+                _uiState.update { state ->
+                    state.copy(
+                        permissions = state.permissions.map {
+                            if (it.name == item.name) it.copy(
+                                status = if (enable) PermissionStatus.GRANTED else PermissionStatus.DENIED,
+                                isProcessing = false
+                            ) else it
+                        }
+                    )
+                }
+            }
 
             val toastMsg = if (success) {
                 if (enable) "✅ Đã cấp: ${item.label}" else "⚠️ Đã thu hồi: ${item.label}"
@@ -298,6 +312,10 @@ class PermissionGranterViewModel @Inject constructor(
                 "❌ Thất bại: $message"
             }
             _uiState.update { it.copy(statusFeedback = toastMsg) }
+
+            // Chờ 150ms để Android SettingsProvider / AppOps commit DB rồi mới sync lại nền
+            delay(150)
+            refreshPermissionsForSelectedApp()
         }
     }
 

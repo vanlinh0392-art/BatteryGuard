@@ -76,6 +76,17 @@ class UniversalPermissionManager @Inject constructor(
         val uid = appInfo.uid
         val isSystemApp = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
 
+        val isXiaomi = XiaomiHelper.isXiaomi()
+        val rawAppOpsDump = if (isXiaomi && (shizukuManager.isReady() || shizukuManager.ensureReady())) {
+            try {
+                executeShizukuCommandWithTimeout(arrayOf("cmd", "appops", "get", packageName), 2000L).stdout
+            } catch (_: Exception) {
+                ""
+            }
+        } else {
+            ""
+        }
+
         val resultList = mutableListOf<DynamicPermissionItem>()
 
         // 1. Duyệt qua từng quyền thực sự được khai báo trong AndroidManifest
@@ -130,7 +141,7 @@ class UniversalPermissionManager @Inject constructor(
             // Nếu là quyền AppOps: kiểm tra trạng thái thực tế qua AppOpsManager
             val opCode = FastPermissionMapper.APPOPS_MAP[permission]
             if (opCode != null) {
-                isGranted = checkAppOpAllowed(packageName, uid, opCode)
+                isGranted = checkAppOpAllowed(packageName, uid, opCode, permission, rawAppOpsDump)
             }
 
             // Tra cứu nhãn tiếng Việt (ưu tiên PRESEEDED_LABEL_CACHE để tránh IPC)
@@ -181,8 +192,9 @@ class UniversalPermissionManager @Inject constructor(
         )
 
         // 3. Nếu là điện thoại Xiaomi / HyperOS (không áp dụng cho Android TV): Bổ sung các mã AppOps Xiaomi
-        if (XiaomiHelper.isXiaomi()) {
-            val hasAutoStart = checkAppOpAllowed(packageName, uid, "10053") || checkAppOpAllowed(packageName, uid, "10008")
+        if (isXiaomi) {
+            val hasAutoStart = checkAppOpAllowed(packageName, uid, "10053", rawAppOpsDump = rawAppOpsDump) ||
+                    checkAppOpAllowed(packageName, uid, "10008", rawAppOpsDump = rawAppOpsDump)
             resultList.add(
                 DynamicPermissionItem(
                     name = "XIAOMI_AUTOSTART",
@@ -196,7 +208,7 @@ class UniversalPermissionManager @Inject constructor(
                 )
             )
 
-            val hasBgPopup = checkAppOpAllowed(packageName, uid, "10022")
+            val hasBgPopup = checkAppOpAllowed(packageName, uid, "10022", rawAppOpsDump = rawAppOpsDump)
             resultList.add(
                 DynamicPermissionItem(
                     name = "XIAOMI_POPUP_BACKGROUND",
@@ -254,13 +266,13 @@ class UniversalPermissionManager @Inject constructor(
 
         if (item.name == "XIAOMI_AUTOSTART") {
             val mode = if (enable) "allow" else "default"
-            val cmd = "cmd appops set --user 0 $packageName 10053 $mode; cmd appops set --user 0 $packageName 10008 $mode"
+            val cmd = "cmd appops set $packageName 10053 $mode; cmd appops set $packageName 10008 $mode; am force-stop com.miui.securitycenter"
             return@withContext executeCommandWithFallback(cmd)
         }
 
         if (item.category == PermissionCategory.OEM_XIAOMI && item.opCode != null) {
             val mode = if (enable) "allow" else "default"
-            val cmd = "cmd appops set --user 0 $packageName ${item.opCode} $mode"
+            val cmd = "cmd appops set $packageName ${item.opCode} $mode; am force-stop com.miui.securitycenter"
             return@withContext executeCommandWithFallback(cmd)
         }
 
@@ -521,19 +533,67 @@ class UniversalPermissionManager @Inject constructor(
 
     // ================== CÁC HÀM TIỆN ÍCH HỆ THỐNG ==================
 
-    private fun checkAppOpAllowed(packageName: String, uid: Int, opCodeOrName: String): Boolean {
-        return try {
-            val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+    private fun checkAppOpAllowed(
+        packageName: String,
+        uid: Int,
+        opCodeOrName: String,
+        permission: String? = null,
+        rawAppOpsDump: String = ""
+    ): Boolean {
+        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+
+        // 1. Thử qua AppOpsManager.permissionToOp chuẩn của Android SDK
+        if (permission != null) {
+            val opStr = AppOpsManager.permissionToOp(permission)
+            if (opStr != null) {
+                try {
+                    val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        appOps.unsafeCheckOpNoThrow(opStr, uid, packageName)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        appOps.checkOpNoThrow(opStr, uid, packageName)
+                    }
+                    if (mode == AppOpsManager.MODE_ALLOWED) return true
+                } catch (_: Exception) {}
+            }
+        }
+
+        // 2. Thử trực tiếp với opCodeOrName
+        try {
             val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 appOps.unsafeCheckOpNoThrow(opCodeOrName, uid, packageName)
             } else {
                 @Suppress("DEPRECATION")
                 appOps.checkOpNoThrow(opCodeOrName, uid, packageName)
             }
-            mode == AppOpsManager.MODE_ALLOWED
-        } catch (_: Exception) {
-            false
+            if (mode == AppOpsManager.MODE_ALLOWED) return true
+        } catch (_: Exception) {}
+
+        // 3. Nếu là mã số nguyên (Xiaomi Custom AppOps như 10053, 10008, 10022...)
+        val intOp = opCodeOrName.toIntOrNull()
+        if (intOp != null) {
+            // Thử qua Reflection method ẩn checkOpNoThrow(int, int, String)
+            try {
+                val method = AppOpsManager::class.java.getMethod(
+                    "checkOpNoThrow",
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType,
+                    String::class.java
+                )
+                val mode = method.invoke(appOps, intOp, uid, packageName) as Int
+                if (mode == AppOpsManager.MODE_ALLOWED) return true
+            } catch (_: Throwable) {}
+
+            // Thử đối chiếu với rawAppOpsDump từ shell (100% chuẩn xác trên HyperOS/MIUI)
+            if (rawAppOpsDump.isNotBlank()) {
+                val isAllowInDump = rawAppOpsDump.contains("$opCodeOrName: allow") ||
+                        rawAppOpsDump.contains("($opCodeOrName): allow") ||
+                        rawAppOpsDump.contains("MIUIOP($opCodeOrName): allow")
+                if (isAllowInDump) return true
+            }
         }
+
+        return false
     }
 
     private fun isIgnoringBatteryOptimizations(packageName: String): Boolean {
