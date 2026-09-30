@@ -6,6 +6,7 @@ import android.provider.Settings
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,6 +31,12 @@ class ShizukuManager @Inject constructor(
     private val _status = MutableStateFlow(ShizukuStatus.NOT_INSTALLED)
     val status: StateFlow<ShizukuStatus> = _status.asStateFlow()
 
+    // ========== Auto-recovery ==========
+    private val recoveryScope = CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+    /** Tối đa 3 lần tự hồi sinh liên tiếp trước khi dừng (reset khi binder sống lại) */
+    private val MAX_AUTO_REVIVE = 3
+    @Volatile private var autoReviveCount = 0
+
     // ========== Anti-spam: Cache + Cooldown ==========
     
     /** Cache kết quả trong 30 giây — tránh gọi pingBinder() nhiều lần trong 1 chu kỳ quét */
@@ -46,6 +53,7 @@ class ShizukuManager @Inject constructor(
 
     private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
         android.util.Log.d("ShizukuManager", "🔗 Binder received! Shizuku đã kết nối lại.")
+        autoReviveCount = 0  // Reset bộ đếm khi binder sống lại thành công
         invalidateCache()
         updateStatus()
         // Tắt thông báo mất kết nối
@@ -59,6 +67,8 @@ class ShizukuManager @Inject constructor(
         updateStatus()
         // Push thông báo mất kết nối 1 lần
         com.pin.batteryguard.util.NotificationHelper.showShizukuDisconnected(context)
+        // Auto-recovery: tự hồi sinh Shizuku sau 8 giây (đủ để HyperOS settle)
+        scheduleAutoRevive()
     }
 
     private val requestPermissionResultListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
@@ -416,8 +426,47 @@ class ShizukuManager @Inject constructor(
         }
     }
 
+    /**
+     * Tự hồi sinh Shizuku khi binder chết.
+     * Chờ 8s (HyperOS settle) rồi gọi startShizukuService.
+     * Tối đa 3 lần liên tiếp. Reset khi binder sống lại.
+     */
+    private fun scheduleAutoRevive() {
+        if (autoReviveCount >= MAX_AUTO_REVIVE) {
+            android.util.Log.w("ShizukuManager", "⏹️ Đã thử hồi sinh $MAX_AUTO_REVIVE lần, dừng. User cần bấm Reload.")
+            return
+        }
+        autoReviveCount++
+        android.util.Log.i("ShizukuManager", "🔄 Auto-recovery $autoReviveCount/$MAX_AUTO_REVIVE — chờ 8s...")
+        recoveryScope.launch {
+            delay(8000)
+            try {
+                if (Shizuku.pingBinder()) {
+                    android.util.Log.i("ShizukuManager", "✅ Shizuku đã tự sống lại, hủy auto-recovery.")
+                    autoReviveCount = 0
+                    return@launch
+                }
+            } catch (_: Exception) {}
+
+            if (!isWirelessDebuggingEnabled() && hasWriteSecureSettings()) {
+                android.util.Log.d("ShizukuManager", "📡 Auto-recovery: WD TẮT → tự bật")
+                enableWirelessDebugging()
+                delay(2000)
+            }
+
+            val revived = autoStarter.startShizukuService(notifyOnSuccess = true, isManual = false)
+            if (revived) {
+                android.util.Log.i("ShizukuManager", "✅ Auto-recovery thành công!")
+                autoReviveCount = 0
+            } else {
+                android.util.Log.w("ShizukuManager", "⚠️ Auto-recovery lần $autoReviveCount thất bại.")
+            }
+        }
+    }
+
     fun onDestroy() {
         try {
+            recoveryScope.cancel()
             Shizuku.removeBinderReceivedListener(binderReceivedListener)
             Shizuku.removeBinderDeadListener(binderDeadListener)
             Shizuku.removeRequestPermissionResultListener(requestPermissionResultListener)
