@@ -125,7 +125,7 @@ class SettingsDataStore(private val context: Context) {
 
     val shieldConfigFlow: Flow<com.pin.batteryguard.domain.model.AppShieldConfig> = context.dataStore.data.map { preferences ->
         com.pin.batteryguard.domain.model.AppShieldConfig(
-            isEnabled = preferences[KEY_SHIELD_ENABLED] ?: false,
+            isEnabled = preferences[KEY_SHIELD_ENABLED] ?: true,
             autoDetectBanks = preferences[KEY_SHIELD_AUTO_DETECT_BANKS] ?: true,
             autoRevertMinutes = (preferences[KEY_SHIELD_REVERT_MINUTES] ?: 10).coerceIn(1, 120),
             revertOnScreenOff = preferences[KEY_SHIELD_REVERT_ON_SCREEN_OFF] ?: true,

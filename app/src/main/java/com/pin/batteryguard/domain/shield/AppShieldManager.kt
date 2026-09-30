@@ -51,7 +51,8 @@ class AppShieldManager @Inject constructor(
     private val shieldedAppDao: ShieldedAppDao,
     private val settingsDataStore: SettingsDataStore,
     private val shizukuAutoStarter: ShizukuAutoStarter,
-    private val forceStopManager: ForceStopManager
+    private val forceStopManager: ForceStopManager,
+    private val shizukuManager: com.pin.batteryguard.shizuku.ShizukuManager
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
@@ -62,6 +63,10 @@ class AppShieldManager @Inject constructor(
 
     // RAM Cache cho các package ngân hàng / tài chính đã được TỰ ĐỘNG PHÁT HIỆN
     private val _autoDetectedBankPackages = ConcurrentHashMap.newKeySet<String>()
+
+    // RAM Cache cho cấu hình AppShield — Đọc tức thì 0ms, không đợi DataStore Disk I/O
+    @Volatile
+    private var cachedConfig: AppShieldConfig = AppShieldConfig(isEnabled = true)
 
     // Cờ trạng thái tự động nhận diện từ cấu hình
     @Volatile
@@ -86,9 +91,10 @@ class AppShieldManager @Inject constructor(
             }
         }
 
-        // Lắng nghe cấu hình để cập nhật cờ Auto-detect ngân hàng
+        // Lắng nghe cấu hình để cập nhật RAM cache cho AppShield
         scope.launch {
             settingsDataStore.shieldConfigFlow.collectLatest { config ->
+                cachedConfig = config
                 isAutoDetectEnabled = config.autoDetectBanks
             }
         }
@@ -233,8 +239,25 @@ class AppShieldManager @Inject constructor(
         return context.checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS") == PackageManager.PERMISSION_GRANTED
     }
 
+    /** Kiểm tra xem cài đặt trên phần cứng máy thực tế đã đang bị ẩn chưa */
+    fun isCurrentlySettingsHidden(): Boolean {
+        val cr = context.contentResolver
+        val dev = try { Settings.Global.getInt(cr, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) } catch (_: Exception) { 0 }
+        val wd = try { Settings.Global.getInt(cr, "adb_wifi_enabled", 0) } catch (_: Exception) { 0 }
+        return dev == 0 && wd == 0
+    }
+
     /**
      * Kích hoạt ẩn Developer Options / ADB khi phát hiện mở app ngân hàng.
+     * Kiến trúc Two-Phase:
+     * - Phase 1: Zero-Latency Fast-Path (< 1.5ms, In-Memory):
+     *     + Chặn đứng Shizuku auto-revive & auto-enable wireless debugging
+     *     + Ghi tắt NGAY LẬP TỨC: DEVELOPMENT_SETTINGS_ENABLED = 0, ADB_ENABLED = 0, adb_wifi_enabled = 0 (Global + Secure + OEM)
+     *     + Nếu config.relaunchApp: fastForceStop + relaunch app sạch sẽ
+     * - Phase 2: Async Persistence:
+     *     + Lưu snapshot trạng thái vào Room DB bất đồng bộ
+     *     + Lập lịch AlarmManager Hardware Watchdog
+     *     + Hiển thị Ongoing Notification với nút Khôi phục
      */
     suspend fun hideSettingsForApp(packageName: String): Boolean = withContext(Dispatchers.IO) {
         if (!hasWriteSecureSettings()) {
@@ -242,133 +265,152 @@ class AppShieldManager @Inject constructor(
             return@withContext false
         }
 
-        val config = settingsDataStore.shieldConfigFlow.first()
-        if (!config.isEnabled) return@withContext false
+        val config = cachedConfig
+        // Nếu cả master switch và autoDetectBanks đều tắt thì bỏ qua
+        if (!config.isEnabled && !config.autoDetectBanks) return@withContext false
 
-        mutex.withLock {
-            // Cooldown check trong mutex để tránh race condition (BUG #3 fix)
-            val now = SystemClock.elapsedRealtime()
-            val lastTrigger = recentTriggerTimestamps[packageName] ?: 0L
-            if (now - lastTrigger < 10_000L) {
-                Log.d(TAG, "Bỏ qua trigger trùng lặp cho $packageName (cooldown)")
-                return@withLock true
-            }
-            recentTriggerTimestamps[packageName] = now
-            // Dọn entries cũ > 1 phút (BUG #7 fix)
-            recentTriggerTimestamps.entries.removeIf { now - it.value > 60_000L }
+        val cr = context.contentResolver
+        val now = SystemClock.elapsedRealtime()
+        val lastTrigger = recentTriggerTimestamps[packageName] ?: 0L
 
-            val existingSnapshot = snapshotDao.getSnapshot()
-            if (existingSnapshot?.isCurrentlyHidden == true) {
-                Log.i(TAG, "Cài đặt đã đang ở trạng thái ẩn. Gia hạn bộ đếm hẹn giờ.")
-                scheduleWatchdogAlarm(config.autoRevertMinutes)
-                return@withLock true
-            }
-
-            val cr = context.contentResolver
-
-            // 1. Chụp Snapshot trạng thái gốc
-            val devEnabled = try {
-                Settings.Global.getInt(cr, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 1)
-            } catch (_: Exception) { 1 }
-
-            val adbEnabled = try {
-                Settings.Global.getInt(cr, Settings.Global.ADB_ENABLED, 1)
-            } catch (_: Exception) { 1 }
-
-            val adbWifiEnabled = try {
-                Settings.Global.getInt(cr, "adb_wifi_enabled", 1)
-            } catch (_: Exception) { 1 }
-
-            val accStr = try {
-                Settings.Secure.getString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
-            } catch (_: Exception) { "" }
-
-            val accEnabled = try {
-                Settings.Secure.getInt(cr, Settings.Secure.ACCESSIBILITY_ENABLED, 1)
-            } catch (_: Exception) { 1 }
-
-            val wasShizukuRunning = try {
-                Shizuku.pingBinder()
-            } catch (_: Exception) { false }
-
-            val snapshot = AppShieldSnapshotEntity(
-                id = 1,
-                isCurrentlyHidden = true,
-                hideTimestamp = System.currentTimeMillis(),
-                timeoutMinutes = config.autoRevertMinutes,
-                triggeredPackage = packageName,
-                originalDevOptionsEnabled = devEnabled,
-                originalAdbEnabled = adbEnabled,
-                originalAdbWifiEnabled = adbWifiEnabled,
-                originalAccessibilityEnabled = accEnabled,
-                originalAccessibilityServices = accStr,
-                wasShizukuRunning = wasShizukuRunning
-            )
-            snapshotDao.saveSnapshot(snapshot)
-
-            // 2. Tùy chọn kill app trước để xóa cache bảo mật của ngân hàng
-            if (config.relaunchApp) {
-                try {
-                    forceStopManager.forceStopDetailed(packageName, 0)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Không thể force-stop $packageName: ${e.message}")
-                }
-            }
-
-            // 3. Thực thi ẩn cài đặt hệ thống
-            try {
-                if (config.hideDevOptions) {
-                    Settings.Global.putInt(cr, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0)
-                }
-                if (config.hideAdb) {
-                    Settings.Global.putInt(cr, Settings.Global.ADB_ENABLED, 0)
-                }
-                if (config.hideWirelessAdb) {
-                    Settings.Global.putInt(cr, "adb_wifi_enabled", 0)
-                }
-                if (config.hideAccessibility && accStr.isNotBlank()) {
-                    Settings.Secure.putString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, "")
-                }
-                Log.i(TAG, "✅ Đã ẩn thành công Developer Options & ADB cho $packageName")
-            } catch (e: Exception) {
-                Log.e(TAG, "Lỗi khi ghi Secure Settings: ${e.message}", e)
-                return@withLock false
-            }
-
-            // 4. Mở lại ứng dụng ngân hàng sạch sẽ nếu có tùy chọn relaunch
-            if (config.relaunchApp) {
-                val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName)
-                if (launchIntent != null) {
-                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    context.startActivity(launchIntent)
-                }
-            }
-
-            // 5. Lập lịch hẹn giờ khôi phục qua AlarmManager phần cứng
-            scheduleWatchdogAlarm(config.autoRevertMinutes)
-
-            // 6. Hiển thị Ongoing Notification kèm nút Khôi phục ngay
-            val revertIntent = Intent(context, AppShieldWatchdogReceiver::class.java).apply {
-                action = AppShieldWatchdogReceiver.ACTION_MANUAL_REVERT
-            }
-            val pendingRevert = PendingIntent.getBroadcast(
-                context, 101, revertIntent,
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-            )
-            val appLabel = try {
-                val info = context.packageManager.getApplicationInfo(packageName, 0)
-                context.packageManager.getApplicationLabel(info).toString()
-            } catch (_: Exception) { packageName }
-
-            NotificationHelper.showAppShieldOngoingNotification(
-                context,
-                appLabel,
-                config.autoRevertMinutes,
-                pendingRevert
-            )
-
-            true
+        // Reality Check: Nếu settings thực sự đã ẩn và trong cooldown 2s -> bỏ qua
+        if (now - lastTrigger < 2_000L && isCurrentlySettingsHidden()) {
+            Log.d(TAG, "Bỏ qua trigger trùng lặp cho $packageName (cài đặt thực tế đã ẩn)")
+            return@withContext true
         }
+        recentTriggerTimestamps[packageName] = now
+        recentTriggerTimestamps.entries.removeIf { now - it.value > 60_000L }
+
+        // ==========================================
+        // ⚡ PHASE 1: ZERO-LATENCY FAST-PATH (< 1.5ms)
+        // ==========================================
+        // 1. Chặn đứng Shizuku auto-revive & auto-enable wireless debugging
+        shizukuManager.isShieldActive = true
+        shizukuManager.cancelAutoRevive()
+
+        // 2. Chụp trạng thái thực tế trước khi ghi đè để lưu snapshot chính xác
+        val devEnabled = try {
+            Settings.Global.getInt(cr, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 1)
+        } catch (_: Exception) { 1 }
+
+        val adbEnabled = try {
+            Settings.Global.getInt(cr, Settings.Global.ADB_ENABLED, 1)
+        } catch (_: Exception) { 1 }
+
+        val adbWifiEnabled = try {
+            Settings.Global.getInt(cr, "adb_wifi_enabled", 1)
+        } catch (_: Exception) { 1 }
+
+        val wasShizukuRunning = try {
+            Shizuku.pingBinder()
+        } catch (_: Exception) { false }
+
+        // 3. Tắt cài đặt hệ thống NGAY LẬP TỨC
+        try {
+            if (config.hideDevOptions) {
+                Settings.Global.putInt(cr, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0)
+                try { Settings.Secure.putInt(cr, "development_settings_enabled", 0) } catch (_: Exception) {}
+            }
+            if (config.hideAdb) {
+                Settings.Global.putInt(cr, Settings.Global.ADB_ENABLED, 0)
+                try { Settings.Secure.putInt(cr, "adb_enabled", 0) } catch (_: Exception) {}
+            }
+            if (config.hideWirelessAdb) {
+                Settings.Global.putInt(cr, "adb_wifi_enabled", 0)
+            }
+            // Xiaomi / HyperOS specific defense
+            try {
+                Settings.Secure.putInt(cr, "security_adb_install_enable", 0)
+                Settings.Secure.putInt(cr, "adb_security_enabled", 0)
+            } catch (_: Exception) {}
+            Log.i(TAG, "⚡ [Fast-Path] Đã tắt Developer Options & Wireless ADB cho $packageName")
+        } catch (e: Exception) {
+            Log.e(TAG, "Lỗi khi ghi Secure Settings: ${e.message}", e)
+            return@withContext false
+        }
+
+        // 4. Fast Kill & Clean Relaunch (nếu cấu hình yêu cầu)
+        if (config.relaunchApp) {
+            // Dùng fastForceStop (~15ms, không delay, không dumpsys)
+            forceStopManager.fastForceStop(packageName, 0)
+            try {
+                val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+                am?.killBackgroundProcesses(packageName)
+            } catch (_: Exception) {}
+
+            val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName)
+            if (launchIntent != null) {
+                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                context.startActivity(launchIntent)
+            }
+        }
+
+        // ==========================================
+        // 💾 PHASE 2: ASYNC PERSISTENCE & WATCHDOG
+        // ==========================================
+        scope.launch {
+            mutex.withLock {
+                val existingSnapshot = snapshotDao.getSnapshot()
+                if (existingSnapshot?.isCurrentlyHidden == true) {
+                    scheduleWatchdogAlarm(config.autoRevertMinutes)
+                    return@withLock
+                }
+
+                val accStr = try {
+                    Settings.Secure.getString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
+                } catch (_: Exception) { "" }
+
+                val accEnabled = try {
+                    Settings.Secure.getInt(cr, Settings.Secure.ACCESSIBILITY_ENABLED, 1)
+                } catch (_: Exception) { 1 }
+
+                if (config.hideAccessibility && accStr.isNotBlank()) {
+                    try {
+                        Settings.Secure.putString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, "")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Không thể ẩn Accessibility Services: ${e.message}")
+                    }
+                }
+
+                val snapshot = AppShieldSnapshotEntity(
+                    id = 1,
+                    isCurrentlyHidden = true,
+                    hideTimestamp = System.currentTimeMillis(),
+                    timeoutMinutes = config.autoRevertMinutes,
+                    triggeredPackage = packageName,
+                    originalDevOptionsEnabled = if (devEnabled == 0) 1 else devEnabled,
+                    originalAdbEnabled = if (adbEnabled == 0) 1 else adbEnabled,
+                    originalAdbWifiEnabled = if (adbWifiEnabled == 0) 1 else adbWifiEnabled,
+                    originalAccessibilityEnabled = accEnabled,
+                    originalAccessibilityServices = accStr,
+                    wasShizukuRunning = wasShizukuRunning
+                )
+                snapshotDao.saveSnapshot(snapshot)
+
+                scheduleWatchdogAlarm(config.autoRevertMinutes)
+
+                val revertIntent = Intent(context, AppShieldWatchdogReceiver::class.java).apply {
+                    action = AppShieldWatchdogReceiver.ACTION_MANUAL_REVERT
+                }
+                val pendingRevert = PendingIntent.getBroadcast(
+                    context, 101, revertIntent,
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                )
+                val appLabel = try {
+                    val info = context.packageManager.getApplicationInfo(packageName, 0)
+                    context.packageManager.getApplicationLabel(info).toString()
+                } catch (_: Exception) { packageName }
+
+                NotificationHelper.showAppShieldOngoingNotification(
+                    context,
+                    appLabel,
+                    config.autoRevertMinutes,
+                    pendingRevert
+                )
+            }
+        }
+
+        true
     }
 
     /**
@@ -376,6 +418,8 @@ class AppShieldManager @Inject constructor(
      */
     suspend fun restoreSettings(reason: String = "Manual"): Boolean = withContext(Dispatchers.IO) {
         mutex.withLock {
+            // Đánh dấu tắt khiên bảo vệ để cho phép Shizuku hoạt động lại
+            shizukuManager.isShieldActive = false
             val snapshot = snapshotDao.getSnapshot()
             if (snapshot == null || !snapshot.isCurrentlyHidden) {
                 Log.d(TAG, "Không có phiên ẩn nào cần khôi phục.")

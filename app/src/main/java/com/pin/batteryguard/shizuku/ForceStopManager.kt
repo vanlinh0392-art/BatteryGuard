@@ -31,6 +31,19 @@ class ForceStopManager @Inject constructor(
     suspend fun unfreezePackage(packageName: String, userId: Int = 0): Result<ActionResult> =
         resultOf(unfreezeDetailed(packageName, userId)).also { invalidateFrozenCache() }
 
+    /**
+     * Fast-path force-stop cho AppShield:
+     * - Chỉ kiểm tra `isReady()` (KHÔNG gọi `ensureReady()` để tránh vô tình auto-enable Wireless Debugging)
+     * - Không delay(250)
+     * - Không dumpsys package
+     * - Tốc độ thực thi ~15ms
+     */
+    suspend fun fastForceStop(packageName: String, userId: Int = 0): Boolean = withContext(Dispatchers.IO) {
+        if (!shizukuManager.isReady()) return@withContext false
+        val command = execute("am", "force-stop", "--user", userId.toString(), packageName, timeoutMs = 2000L)
+        command.commandSucceeded
+    }
+
     suspend fun forceStopDetailed(packageName: String, userId: Int): ActionResult = withContext(Dispatchers.IO) {
         if (!shizukuManager.ensureReady()) return@withContext unavailable("force-stop", packageName, userId)
         val command = execute("am", "force-stop", "--user", userId.toString(), packageName)

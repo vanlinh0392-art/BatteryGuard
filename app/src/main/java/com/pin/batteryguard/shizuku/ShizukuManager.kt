@@ -51,6 +51,21 @@ class ShizukuManager @Inject constructor(
     /** BUG #2 FIX: Flag để chỉ grant quyền 1 lần duy nhất mỗi session */
     @Volatile private var permissionsGranted = false
 
+    /**
+     * Cờ bảo vệ: Khi AppShield đang kích hoạt (ẩn Developer Options/ADB để bảo vệ app ngân hàng),
+     * TUYỆT ĐỐI KHÔNG tự động bật lại Wireless Debugging hoặc tự hồi sinh Shizuku.
+     */
+    @Volatile var isShieldActive: Boolean = false
+
+    private var autoReviveJob: kotlinx.coroutines.Job? = null
+
+    fun cancelAutoRevive() {
+        autoReviveJob?.cancel()
+        autoReviveJob = null
+        autoReviveCount = 0
+        android.util.Log.i("ShizukuManager", "🛡️ Đã hủy toàn bộ tác vụ Shizuku auto-revive do AppShield đang kích hoạt.")
+    }
+
     private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
         android.util.Log.d("ShizukuManager", "🔗 Binder received! Shizuku đã kết nối lại.")
         autoReviveCount = 0  // Reset bộ đếm khi binder sống lại thành công
@@ -65,6 +80,11 @@ class ShizukuManager @Inject constructor(
         invalidateCache()
         permissionsGranted = false  // Reset flag khi binder chết để grant lại lần sau
         updateStatus()
+        // Nếu AppShield đang kích hoạt bảo vệ app ngân hàng, không hiện thông báo và không tự bật lại WD
+        if (isShieldActive) {
+            android.util.Log.i("ShizukuManager", "🛡️ AppShield đang bảo vệ ngân hàng — bỏ qua thông báo mất kết nối và dừng auto-revive.")
+            return@OnBinderDeadListener
+        }
         // Push thông báo mất kết nối 1 lần
         com.pin.batteryguard.util.NotificationHelper.showShizukuDisconnected(context)
         // Auto-recovery: tự hồi sinh Shizuku sau 8 giây (đủ để HyperOS settle)
@@ -155,6 +175,10 @@ class ShizukuManager @Inject constructor(
      * 5. Cập nhật và trả về trạng thái
      */
     suspend fun forceRefresh(): Boolean {
+        if (isShieldActive) {
+            android.util.Log.w("ShizukuManager", "🛡️ Bỏ qua forceRefresh vì AppShield đang bảo vệ ứng dụng ngân hàng.")
+            return false
+        }
         android.util.Log.d("ShizukuManager", "🔄 User bấm Reload — gửi lệnh khởi chạy qua ADB...")
         invalidateCache()
         permissionsGranted = false
@@ -218,6 +242,11 @@ class ShizukuManager @Inject constructor(
             }
         } catch (e: Exception) {
             // Ignore
+        }
+
+        // Nếu AppShield đang bảo vệ ngân hàng, TUYỆT ĐỐI không tự bật Wireless Debugging
+        if (isShieldActive) {
+            return isReady()
         }
 
         // Thử kích hoạt lại Shizuku qua toggle Wireless Debugging
@@ -300,6 +329,10 @@ class ShizukuManager @Inject constructor(
      * Bật các thiết lập ADB cần thiết: Tùy chọn nhà phát triển, Gỡ lỗi USB, Gỡ lỗi không dây.
      */
     fun enableWirelessDebugging(): Boolean {
+        if (isShieldActive) {
+            android.util.Log.w("ShizukuManager", "🛡️ Chặn bật Wireless Debugging vì AppShield đang bảo vệ ứng dụng ngân hàng!")
+            return false
+        }
         if (!hasWriteSecureSettings()) return false
         return try {
             val cr = context.contentResolver
@@ -327,6 +360,10 @@ class ShizukuManager @Inject constructor(
      * @return true nếu đã thực hiện toggle thành công, false nếu không thể
      */
     private suspend fun tryToggleWirelessDebugging(): Boolean {
+        if (isShieldActive) {
+            android.util.Log.w("ShizukuManager", "🛡️ Chặn toggle Wireless Debugging vì AppShield đang hoạt động!")
+            return false
+        }
         lastReconnectAttemptTime = System.currentTimeMillis()
 
         if (!hasWriteSecureSettings()) {
@@ -432,14 +469,23 @@ class ShizukuManager @Inject constructor(
      * Tối đa 3 lần liên tiếp. Reset khi binder sống lại.
      */
     private fun scheduleAutoRevive() {
+        if (isShieldActive) {
+            android.util.Log.i("ShizukuManager", "🛡️ AppShield đang bảo vệ ngân hàng — bỏ qua scheduleAutoRevive.")
+            return
+        }
         if (autoReviveCount >= MAX_AUTO_REVIVE) {
             android.util.Log.w("ShizukuManager", "⏹️ Đã thử hồi sinh $MAX_AUTO_REVIVE lần, dừng. User cần bấm Reload.")
             return
         }
         autoReviveCount++
         android.util.Log.i("ShizukuManager", "🔄 Auto-recovery $autoReviveCount/$MAX_AUTO_REVIVE — chờ 8s...")
-        recoveryScope.launch {
+        autoReviveJob?.cancel()
+        autoReviveJob = recoveryScope.launch {
             delay(8000)
+            if (isShieldActive) {
+                android.util.Log.i("ShizukuManager", "🛡️ AppShield đang hoạt động — hủy auto-recovery sau delay.")
+                return@launch
+            }
             try {
                 if (Shizuku.pingBinder()) {
                     android.util.Log.i("ShizukuManager", "✅ Shizuku đã tự sống lại, hủy auto-recovery.")
@@ -466,6 +512,7 @@ class ShizukuManager @Inject constructor(
 
     fun onDestroy() {
         try {
+            cancelAutoRevive()
             recoveryScope.cancel()
             Shizuku.removeBinderReceivedListener(binderReceivedListener)
             Shizuku.removeBinderDeadListener(binderDeadListener)

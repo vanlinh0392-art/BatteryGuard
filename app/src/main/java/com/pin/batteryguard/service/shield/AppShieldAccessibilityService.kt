@@ -47,15 +47,18 @@ class AppShieldAccessibilityService : AccessibilityService() {
         // Bỏ qua chính BatteryGuard và package rỗng
         if (packageName == this.packageName || packageName.isBlank()) return
 
+        val isShieldTarget = appShieldManager.shouldShieldApp(packageName)
         val now = SystemClock.elapsedRealtime()
-        if (packageName == lastHandledPackage && (now - lastHandledTime < DEBOUNCE_MS)) {
-            return
-        }
-        lastHandledPackage = packageName   // C3: LUÔN cập nhật để debounce chặn 99% app thường
-        lastHandledTime = now               // C3: LUÔN cập nhật
 
-        // Kiểm tra kết hợp: Ứng dụng người dùng CHỌN THÊM hoặc TỰ ĐỘNG PHÁT HIỆN Ngân hàng/Ví điện tử
-        if (appShieldManager.shouldShieldApp(packageName)) {
+        if (isShieldTarget) {
+            // Đối với app ngân hàng: Nếu cài đặt thực tế chưa ẩn, không bao giờ drop event
+            val isAlreadyHidden = appShieldManager.isCurrentlySettingsHidden()
+            if (isAlreadyHidden && packageName == lastHandledPackage && (now - lastHandledTime < DEBOUNCE_MS)) {
+                return
+            }
+            lastHandledPackage = packageName
+            lastHandledTime = now
+
             scope.launch {
                 try {
                     appShieldManager.hideSettingsForApp(packageName)
@@ -63,6 +66,13 @@ class AppShieldAccessibilityService : AccessibilityService() {
                     Log.e(TAG, "Lỗi khi xử lý bảo vệ app $packageName: ${e.message}", e)
                 }
             }
+        } else {
+            // Đối với 99% app thông thường: Debounce 1500ms chặn spam IPC tuyệt đối
+            if (packageName == lastHandledPackage && (now - lastHandledTime < DEBOUNCE_MS)) {
+                return
+            }
+            lastHandledPackage = packageName
+            lastHandledTime = now
         }
     }
 
