@@ -206,6 +206,7 @@ class PermissionGranterViewModel @Inject constructor(
         val target = _uiState.value.selectedApp ?: return
         viewModelScope.launch(Dispatchers.IO) {
             val list = permissionManager.inspectAppPermissions(target.packageName)
+                .filter { it.isGrantable && it.category != PermissionCategory.SIGNATURE_SYSTEM }
             val hasSnap = permissionManager.hasSnapshot(target.packageName)
             _uiState.update {
                 it.copy(

@@ -161,6 +161,13 @@ class UniversalPermissionManager @Inject constructor(
                 else -> null
             }
 
+            val isGrantable = !isSignatureOnly && category != PermissionCategory.NORMAL && category != PermissionCategory.SIGNATURE_SYSTEM
+
+            // YÊU CẦU: Các quyền bị dis nút ON để cấp quyền thì KO CẦN HIỂN THỊ
+            if (!isGrantable) {
+                continue
+            }
+
             resultList.add(
                 DynamicPermissionItem(
                     name = permission,
@@ -168,7 +175,7 @@ class UniversalPermissionManager @Inject constructor(
                     description = desc,
                     category = category,
                     status = if (isGranted) PermissionStatus.GRANTED else PermissionStatus.DENIED,
-                    isGrantable = !isSignatureOnly && category != PermissionCategory.NORMAL,
+                    isGrantable = true,
                     opCode = opCode,
                     isDeclared = true,
                     isOemSpecific = false
@@ -223,14 +230,15 @@ class UniversalPermissionManager @Inject constructor(
             )
         }
 
-        // Sắp xếp: Đang từ chối lên trước -> Theo thứ tự Category -> Theo tên
-        resultList.sortedWith(
-            compareBy(
-                { it.status == PermissionStatus.GRANTED },
-                { it.category.ordinal },
-                { it.label }
+        // Lọc triệt để: Loại bỏ hoàn toàn các quyền có công tắc bị vô hiệu hóa (disabled)
+        resultList.filter { it.isGrantable && it.category != PermissionCategory.SIGNATURE_SYSTEM && it.category != PermissionCategory.NORMAL }
+            .sortedWith(
+                compareBy(
+                    { it.status == PermissionStatus.GRANTED },
+                    { it.category.ordinal },
+                    { it.label }
+                )
             )
-        )
     }
 
     /**
