@@ -20,7 +20,6 @@ import com.pin.batteryguard.permission.model.PermissionStatus
 import com.pin.batteryguard.security.SecurityValidator
 import com.pin.batteryguard.shizuku.ShizukuManager
 import com.pin.batteryguard.shizuku.executeShizukuCommandWithTimeout
-import com.pin.batteryguard.shizuku.shizukuNewProcess
 import com.pin.batteryguard.util.XiaomiHelper
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -115,8 +114,12 @@ class UniversalPermissionManager @Inject constructor(
             val isSystemPerm = FastPermissionMapper.SYSTEM_PERMISSIONS.contains(permission)
             val isSignatureOnly = (baseLevel == PermissionInfo.PROTECTION_SIGNATURE) && !isDevelopment && !isSystemPerm && !isAppOp && !isSystemApp
 
+            // BỎ QUA HOÀN TOÀN: Quyền yêu cầu Chữ ký ROM (SIGNATURE_SYSTEM) mà Shell/ADB không cấp được
+            if (isSignatureOnly) {
+                continue
+            }
+
             val category = when {
-                isSignatureOnly -> PermissionCategory.SIGNATURE_SYSTEM
                 isBgBattery -> PermissionCategory.BACKGROUND_BATTERY
                 isAppOp -> PermissionCategory.APPOPS
                 isSystemPerm -> PermissionCategory.SYSTEM
@@ -228,6 +231,10 @@ class UniversalPermissionManager @Inject constructor(
     ): Pair<Boolean, String> = withContext(Dispatchers.IO) {
         SecurityValidator.sanitizePackageNameOrThrow(packageName)
 
+        if (!shizukuManager.isReady()) {
+            shizukuManager.ensureReady()
+        }
+
         if (!enable && SecurityValidator.isCriticalSystemApp(packageName)) {
             return@withContext Pair(
                 false,
@@ -284,6 +291,10 @@ class UniversalPermissionManager @Inject constructor(
     ): BatchGrantResult = withContext(Dispatchers.IO) {
         val startTime = System.currentTimeMillis()
         SecurityValidator.sanitizePackageNameOrThrow(packageName)
+
+        if (!shizukuManager.isReady()) {
+            shizukuManager.ensureReady()
+        }
 
         // 1. Tự động chụp Snapshot lưu vào Room DB trước khi can thiệp (chuẩn ACID)
         createSnapshot(packageName, appName, "PRESET_${preset.name}")
@@ -372,6 +383,10 @@ class UniversalPermissionManager @Inject constructor(
     suspend fun grantAllValidPermissions(packageName: String, appName: String): BatchGrantResult = withContext(Dispatchers.IO) {
         val startTime = System.currentTimeMillis()
         SecurityValidator.sanitizePackageNameOrThrow(packageName)
+
+        if (!shizukuManager.isReady()) {
+            shizukuManager.ensureReady()
+        }
 
         createSnapshot(packageName, appName, "PRE_GRANT_ALL")
 
@@ -533,29 +548,32 @@ class UniversalPermissionManager @Inject constructor(
     /**
      * Single-Shot Tagged Compound Shell Pipeline
      * Gộp hàng chục lệnh vào 1 process duy nhất qua Shizuku Binder hoặc ADB socket.
+     * Tự động fallback chạy tuần tự từng lệnh (Sequential Fallback) nếu compound batch trả về 0 thành công.
      */
     private suspend fun executeCompoundPipeline(commands: List<String>): Pair<Int, List<String>> {
         if (commands.isEmpty()) return Pair(0, emptyList())
 
-        val compoundSb = StringBuilder()
-        for (i in commands.indices) {
-            compoundSb.append(commands[i]).append("; echo \"__R__:$i:\$?\"\n")
+        if (!shizukuManager.isReady()) {
+            shizukuManager.ensureReady()
         }
-        val compoundScript = compoundSb.toString()
 
-        val output = if (shizukuManager.isReady()) {
-            try {
-                val proc = shizukuNewProcess(arrayOf("sh", "-c", compoundScript))
-                val finished = proc.waitFor(10, TimeUnit.SECONDS)
-                if (!finished) proc.destroyForcibly()
-                proc.inputStream.bufferedReader().use { it.readText() }
-            } catch (e: Exception) {
-                Log.w(TAG, "Shizuku compound pipeline error: ${e.message}")
-                ""
+        // Tạo single-line script phân tách bằng ; để tương thích hoàn hảo cả sh -c lẫn ADB socket
+        val compoundScript = commands.mapIndexed { idx, cmd -> "$cmd; echo \"__R__:$idx:\$?\"" }.joinToString("; ")
+
+        var output = ""
+        if (shizukuManager.isReady()) {
+            val execRes = executeShizukuCommandWithTimeout(arrayOf("sh", "-c", compoundScript), timeoutMs = 15000L)
+            output = execRes.stdout
+            if (output.isBlank() && execRes.stderr.isNotBlank()) {
+                Log.w(TAG, "Shizuku compound pipeline stderr: ${execRes.stderr}")
             }
-        } else {
+        }
+
+        if (output.isBlank()) {
             val adbRes = adbClient.executeCommand(compoundScript, port = 5555, timeoutMs = 10000)
-            if (adbRes.first) adbRes.second else ""
+            if (adbRes.first) {
+                output = adbRes.second
+            }
         }
 
         var successCount = 0
@@ -565,13 +583,20 @@ class UniversalPermissionManager @Inject constructor(
         val matches = regex.findAll(output).toList()
 
         if (matches.isNotEmpty()) {
+            val executedIndices = mutableSetOf<Int>()
             for (match in matches) {
                 val idx = match.groupValues[1].toIntOrNull() ?: continue
                 val exitCode = match.groupValues[2].toIntOrNull() ?: 1
+                executedIndices.add(idx)
                 if (exitCode == 0) {
                     successCount++
                 } else {
                     if (idx < commands.size) failed.add(commands[idx])
+                }
+            }
+            for (i in commands.indices) {
+                if (!executedIndices.contains(i)) {
+                    failed.add(commands[i])
                 }
             }
         } else {
@@ -583,10 +608,32 @@ class UniversalPermissionManager @Inject constructor(
             }
         }
 
+        // LƯỚI BẢO HIỂM CUỐI CÙNG (Sequential Fallback Loop):
+        // Nếu compound pipeline thất bại 0 thành công (hệt ca 0/7), chuyển ngay sang chạy từng lệnh độc lập
+        if (successCount == 0 && commands.isNotEmpty()) {
+            Log.w(TAG, "Compound pipeline yielded 0 successes. Retrying sequentially for ${commands.size} commands...")
+            var seqSuccess = 0
+            val seqFailed = mutableListOf<String>()
+            for (cmd in commands) {
+                val res = executeCommandWithFallback(cmd)
+                if (res.first) {
+                    seqSuccess++
+                } else {
+                    seqFailed.add(cmd)
+                    Log.w(TAG, "Sequential fallback command failed: $cmd -> ${res.second}")
+                }
+            }
+            return Pair(seqSuccess, seqFailed)
+        }
+
         return Pair(successCount, failed)
     }
 
     private suspend fun executeCommandWithFallback(command: String): Pair<Boolean, String> {
+        if (!shizukuManager.isReady()) {
+            shizukuManager.ensureReady()
+        }
+
         if (shizukuManager.isReady()) {
             try {
                 val cmdArray = arrayOf("sh", "-c", command)
