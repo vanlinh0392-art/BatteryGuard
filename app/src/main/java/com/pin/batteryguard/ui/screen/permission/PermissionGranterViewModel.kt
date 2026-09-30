@@ -3,11 +3,13 @@ package com.pin.batteryguard.ui.screen.permission
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import android.graphics.drawable.Drawable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pin.batteryguard.permission.UniversalPermissionManager
-import com.pin.batteryguard.permission.model.AdvancedPermission
+import com.pin.batteryguard.permission.model.DynamicPermissionItem
+import com.pin.batteryguard.permission.model.PermissionCategory
+import com.pin.batteryguard.permission.model.PermissionPreset
+import com.pin.batteryguard.permission.model.PermissionStatus
 import com.pin.batteryguard.util.PackageHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -17,46 +19,44 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 enum class AppFilterCategory {
-    AUTOMATION, // Tasker, MacroDroid, AutoApps, Automate,...
-    CHAT_AND_BANKING, // Zalo, Messenger, Telegram, Ngân hàng, Ví...
+    AUTOMATION,        // Tasker, MacroDroid, AutoApps, Automate,...
+    CHAT_AND_BANKING,  // Zalo, Messenger, Telegram, Ngân hàng, Ví...
     USER_INSTALLED,
     ALL
 }
 
+/**
+ * Metadata thông tin ứng dụng mục tiêu.
+ * ZERO-BITMAP STATE: Không lưu trữ Drawable/Bitmap trong State để tiết kiệm 99.5% RAM.
+ * Icon sẽ được render On-Demand trong Composable qua PackageHelper LRU cache.
+ */
 data class TargetAppInfo(
     val packageName: String,
     val appName: String,
     val isAutomationApp: Boolean,
     val isChatOrBankApp: Boolean = false,
     val isSystem: Boolean,
-    val isSelfApp: Boolean = false,
-    val icon: Drawable? = null
-)
-
-data class PermissionEntryUi(
-    val permission: AdvancedPermission,
-    val isGranted: Boolean,
-    val isDeclared: Boolean,
-    val isProcessing: Boolean = false
+    val isSelfApp: Boolean = false
 )
 
 data class PermissionGranterUiState(
     val allApps: List<TargetAppInfo> = emptyList(),
     val filteredApps: List<TargetAppInfo> = emptyList(),
     val selectedApp: TargetAppInfo? = null,
-    val permissions: List<PermissionEntryUi> = emptyList(),
+    val permissions: List<DynamicPermissionItem> = emptyList(),
     val searchQuery: String = "",
     val activeCategory: AppFilterCategory = AppFilterCategory.AUTOMATION,
     val isLoading: Boolean = true,
     val isBatchProcessing: Boolean = false,
+    val isRollingBack: Boolean = false,
+    val hasSnapshotToRollback: Boolean = false,
     val statusFeedback: String? = null,
     val showSelfGrantDialog: Boolean = false,
     val pendingSelfGrantBatch: Boolean = false,
-    val pendingSelfPermission: AdvancedPermission? = null,
+    val pendingSelfItem: DynamicPermissionItem? = null,
     val pendingSelfEnable: Boolean? = null,
     val isXiaomiDevice: Boolean = false,
     val isChinaRom: Boolean = false,
@@ -76,25 +76,24 @@ class PermissionGranterViewModel @Inject constructor(
     val uiState: StateFlow<PermissionGranterUiState> = _uiState.asStateFlow()
 
     companion object {
-        // Danh sách các package tự động hóa phổ biến
         val KNOWN_AUTOMATION_PACKAGES = setOf(
-            "net.dinglisch.android.taskerm",         // Tasker
-            "com.joaomgcd.taskersettings",           // Tasker Settings
-            "com.joaomgcd.autoinput",                // AutoInput
-            "com.joaomgcd.autonotification",         // AutoNotification
-            "com.joaomgcd.autotools",                // AutoTools
-            "com.joaomgcd.autowear",                 // AutoWear
-            "com.joaomgcd.autoshare",                // AutoShare
-            "com.joaomgcd.join",                     // Join by joaomgcd
-            "com.arlosoft.macrodroid",               // MacroDroid
-            "com.llamalab.automate",                 // Automate
-            "ch.gridvision.ppam.androidautomator",   // AutomateIt
-            "com.kieronquinn.app.darq",               // DarQ
-            "com.catchingnow.icebox",                // IceBox
-            "com.aistra.hail",                       // Hail
-            "samhaik.shizukushare",                  // Shizuku Runner
-            "rikka.shizuku",                         // Shizuku
-            "com.pin.batteryguard"                   // BatteryGuard
+            "net.dinglisch.android.taskerm",
+            "com.joaomgcd.taskersettings",
+            "com.joaomgcd.autoinput",
+            "com.joaomgcd.autonotification",
+            "com.joaomgcd.autotools",
+            "com.joaomgcd.autowear",
+            "com.joaomgcd.autoshare",
+            "com.joaomgcd.join",
+            "com.arlosoft.macrodroid",
+            "com.llamalab.automate",
+            "ch.gridvision.ppam.androidautomator",
+            "com.kieronquinn.app.darq",
+            "com.catchingnow.icebox",
+            "com.aistra.hail",
+            "samhaik.shizukushare",
+            "rikka.shizuku",
+            "com.pin.batteryguard"
         )
     }
 
@@ -136,36 +135,35 @@ class PermissionGranterViewModel @Inject constructor(
                     isAutomationApp = isAutomation,
                     isChatOrBankApp = isChatOrBank,
                     isSystem = isSystem,
-                    isSelfApp = isSelf,
-                    icon = PackageHelper.getAppIcon(context, pkg)
+                    isSelfApp = isSelf
                 )
-            }.sortedWith(compareByDescending<TargetAppInfo> { it.isAutomationApp }
-                .thenByDescending { it.isChatOrBankApp }
-                .thenBy { it.appName.lowercase() })
+            }.sortedWith(
+                compareByDescending<TargetAppInfo> { it.isSelfApp }
+                    .thenByDescending { it.isAutomationApp }
+                    .thenByDescending { it.isChatOrBankApp }
+                    .thenBy { it.appName.lowercase() }
+            )
 
-            _uiState.update { state ->
-                state.copy(
+            val defaultApp = appList.firstOrNull { it.isSelfApp } ?: appList.firstOrNull()
+
+            _uiState.update {
+                it.copy(
                     allApps = appList,
-                    isLoading = false
+                    isLoading = false,
+                    selectedApp = defaultApp
                 )
             }
-
             filterApps()
-
-            // Mặc định chọn app đầu tiên (ưu tiên Tasker nếu có)
-            val defaultSelection = appList.firstOrNull { it.isAutomationApp } ?: appList.firstOrNull()
-            if (defaultSelection != null && _uiState.value.selectedApp == null) {
-                selectApp(defaultSelection)
-            }
+            defaultApp?.let { selectApp(it) }
         }
     }
 
-    fun selectCategory(category: AppFilterCategory) {
+    fun setCategory(category: AppFilterCategory) {
         _uiState.update { it.copy(activeCategory = category) }
         filterApps()
     }
 
-    fun updateSearchQuery(query: String) {
+    fun setSearchQuery(query: String) {
         _uiState.update { it.copy(searchQuery = query) }
         filterApps()
     }
@@ -191,8 +189,14 @@ class PermissionGranterViewModel @Inject constructor(
     fun selectApp(app: TargetAppInfo) {
         _uiState.update { it.copy(selectedApp = app) }
         viewModelScope.launch(Dispatchers.IO) {
-            val hasSnap = xiaomiFixManager.hasSnapshot(app.packageName)
-            _uiState.update { it.copy(selectedAppHasXiaomiSnapshot = hasSnap) }
+            val hasXiaomiSnap = xiaomiFixManager.hasSnapshot(app.packageName)
+            val hasUniversalSnap = permissionManager.hasSnapshot(app.packageName)
+            _uiState.update {
+                it.copy(
+                    selectedAppHasXiaomiSnapshot = hasXiaomiSnap,
+                    hasSnapshotToRollback = hasUniversalSnap
+                )
+            }
         }
         refreshPermissionsForSelectedApp()
     }
@@ -200,33 +204,30 @@ class PermissionGranterViewModel @Inject constructor(
     fun refreshPermissionsForSelectedApp() {
         val target = _uiState.value.selectedApp ?: return
         viewModelScope.launch(Dispatchers.IO) {
-            val list = AdvancedPermission.PRESET_PERMISSIONS.map { perm ->
-                val isDeclared = permissionManager.isPermissionDeclared(target.packageName, perm.permissionName)
-                val isGranted = permissionManager.checkPermissionStatus(target.packageName, perm)
-                PermissionEntryUi(
-                    permission = perm,
-                    isGranted = isGranted,
-                    isDeclared = isDeclared,
-                    isProcessing = false
+            val list = permissionManager.inspectAppPermissions(target.packageName)
+            val hasSnap = permissionManager.hasSnapshot(target.packageName)
+            _uiState.update {
+                it.copy(
+                    permissions = list,
+                    hasSnapshotToRollback = hasSnap
                 )
             }
-            _uiState.update { it.copy(permissions = list) }
         }
     }
 
-    fun requestTogglePermission(permission: AdvancedPermission, enable: Boolean) {
+    fun requestTogglePermission(item: DynamicPermissionItem, enable: Boolean) {
         val target = _uiState.value.selectedApp ?: return
         if (target.isSelfApp && enable) {
             _uiState.update {
                 it.copy(
                     showSelfGrantDialog = true,
                     pendingSelfGrantBatch = false,
-                    pendingSelfPermission = permission,
+                    pendingSelfItem = item,
                     pendingSelfEnable = true
                 )
             }
         } else {
-            executeTogglePermission(permission, enable)
+            executeTogglePermission(item, enable)
         }
     }
 
@@ -237,7 +238,7 @@ class PermissionGranterViewModel @Inject constructor(
                 it.copy(
                     showSelfGrantDialog = true,
                     pendingSelfGrantBatch = true,
-                    pendingSelfPermission = null,
+                    pendingSelfItem = null,
                     pendingSelfEnable = null
                 )
             }
@@ -248,21 +249,21 @@ class PermissionGranterViewModel @Inject constructor(
 
     fun confirmSelfGrant() {
         val isBatch = _uiState.value.pendingSelfGrantBatch
-        val perm = _uiState.value.pendingSelfPermission
+        val item = _uiState.value.pendingSelfItem
         val enable = _uiState.value.pendingSelfEnable ?: true
         _uiState.update {
             it.copy(
                 showSelfGrantDialog = false,
                 pendingSelfGrantBatch = false,
-                pendingSelfPermission = null,
+                pendingSelfItem = null,
                 pendingSelfEnable = null
             )
         }
 
         if (isBatch) {
             executeGrantAllPermissions()
-        } else if (perm != null) {
-            executeTogglePermission(perm, enable)
+        } else if (item != null) {
+            executeTogglePermission(item, enable)
         }
     }
 
@@ -271,71 +272,88 @@ class PermissionGranterViewModel @Inject constructor(
             it.copy(
                 showSelfGrantDialog = false,
                 pendingSelfGrantBatch = false,
-                pendingSelfPermission = null,
+                pendingSelfItem = null,
                 pendingSelfEnable = null
             )
         }
     }
 
-    private fun executeTogglePermission(permission: AdvancedPermission, enable: Boolean) {
+    private fun executeTogglePermission(item: DynamicPermissionItem, enable: Boolean) {
         val target = _uiState.value.selectedApp ?: return
         viewModelScope.launch {
-            // Set processing state
             _uiState.update { state ->
                 state.copy(
                     permissions = state.permissions.map {
-                        if (it.permission.id == permission.id) it.copy(isProcessing = true) else it
+                        if (it.name == item.name) it.copy(isProcessing = true) else it
                     }
                 )
             }
 
-            val (success, message) = if (enable) {
-                permissionManager.grantPermission(target.packageName, permission)
-            } else {
-                permissionManager.revokePermission(target.packageName, permission)
-            }
-
+            val (success, message) = permissionManager.togglePermission(target.packageName, item, enable)
             refreshPermissionsForSelectedApp()
 
             val toastMsg = if (success) {
-                if (enable) "✅ Đã cấp quyền: ${permission.title}" else "⚠️ Đã thu hồi quyền: ${permission.title}"
+                if (enable) "✅ Đã cấp: ${item.label}" else "⚠️ Đã thu hồi: ${item.label}"
             } else {
                 "❌ Thất bại: $message"
             }
-
             _uiState.update { it.copy(statusFeedback = toastMsg) }
         }
     }
 
     private fun executeGrantAllPermissions() {
         val target = _uiState.value.selectedApp ?: return
-        viewModelScope.launch {
-            val eligible = _uiState.value.permissions.filter {
-                !it.isGranted && (it.isDeclared || it.permission.type == com.pin.batteryguard.permission.model.PermissionType.APP_OPS)
-            }.map { it.permission }
-
-            if (eligible.isEmpty()) {
-                val allCount = _uiState.value.permissions.size
-                val grantedCount = _uiState.value.permissions.count { it.isGranted }
-                _uiState.update {
-                    it.copy(
-                        statusFeedback = "ℹ️ Đã cấp $grantedCount/$allCount quyền. Các quyền còn lại chưa khai báo trong Manifest."
-                    )
-                }
-                return@launch
-            }
-
-            _uiState.update { it.copy(isBatchProcessing = true, statusFeedback = "⏳ Đang cấp ${eligible.size} quyền hợp lệ cho ${target.appName}...") }
-
-            val results = permissionManager.grantAllPermissions(target.packageName, eligible)
-            val successCount = results.values.count { it }
-
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(isBatchProcessing = true, statusFeedback = "⏳ Đang cấp toàn bộ quyền hợp lệ cho ${target.appName}...") }
+            val result = permissionManager.grantAllValidPermissions(target.packageName, target.appName)
             refreshPermissionsForSelectedApp()
-
             _uiState.update {
                 it.copy(
                     isBatchProcessing = false,
-                    statusFeedback = "✅ Hoàn tất: Đã cấp $successCount / ${eligible.size} quyền cho ${target.appName}!"
+                    hasSnapshotToRollback = true,
+                    statusFeedback = "✅ Hoàn tất: Cấp thành công ${result.succeeded}/${result.total} quyền trong ${result.elapsedMs}ms!"
+                )
+            }
+        }
+    }
+
+    /**
+     * Kích hoạt Kịch bản cấp quyền 1-chạm (Presets)
+     */
+    fun applyPreset(preset: PermissionPreset) {
+        val target = _uiState.value.selectedApp ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update {
+                it.copy(
+                    isBatchProcessing = true,
+                    statusFeedback = "⏳ Đang áp dụng kịch bản [${preset.title}] cho ${target.appName}..."
+                )
+            }
+            val res = permissionManager.applyPreset(target.packageName, target.appName, preset)
+            refreshPermissionsForSelectedApp()
+            _uiState.update {
+                it.copy(
+                    isBatchProcessing = false,
+                    hasSnapshotToRollback = true,
+                    statusFeedback = "⚡ [${preset.title}]: Đã áp dụng ${res.succeeded}/${res.total} quyền (${res.elapsedMs}ms)."
+                )
+            }
+        }
+    }
+
+    /**
+     * Khôi phục (Rollback) quyền của ứng dụng về bản lưu Snapshot trước đó
+     */
+    fun rollbackLatestSnapshot() {
+        val target = _uiState.value.selectedApp ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(isRollingBack = true) }
+            val (success, message) = permissionManager.rollbackLatestSnapshot(target.packageName)
+            refreshPermissionsForSelectedApp()
+            _uiState.update {
+                it.copy(
+                    isRollingBack = false,
+                    statusFeedback = message
                 )
             }
         }

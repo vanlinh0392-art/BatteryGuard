@@ -30,9 +30,10 @@ import com.pin.batteryguard.data.db.entity.UidBaseline
         AppPolicyOverride::class,
         com.pin.batteryguard.data.db.entity.AppShieldSnapshotEntity::class,
         com.pin.batteryguard.data.db.entity.ShieldedAppEntity::class,
-        com.pin.batteryguard.data.db.entity.XiaomiFixSnapshotEntity::class
+        com.pin.batteryguard.data.db.entity.XiaomiFixSnapshotEntity::class,
+        com.pin.batteryguard.data.db.entity.PermissionSnapshotEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -46,6 +47,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun appShieldSnapshotDao(): com.pin.batteryguard.data.db.dao.AppShieldSnapshotDao
     abstract fun shieldedAppDao(): com.pin.batteryguard.data.db.dao.ShieldedAppDao
     abstract fun xiaomiFixSnapshotDao(): com.pin.batteryguard.data.db.dao.XiaomiFixSnapshotDao
+    abstract fun permissionSnapshotDao(): com.pin.batteryguard.data.db.dao.PermissionSnapshotDao
 
     companion object {
         private const val DATABASE_NAME = "battery_guard.db"
@@ -59,7 +61,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     DATABASE_NAME
-                ).addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build()
+                ).addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build()
                 INSTANCE = instance
                 instance
             }
@@ -149,6 +151,27 @@ abstract class AppDatabase : RoomDatabase() {
                         wasInNetpolicy INTEGER NOT NULL
                     )
                 """.trimIndent())
+            }
+        }
+
+        val MIGRATION_6_7 = object : androidx.room.migration.Migration(6, 7) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS permission_snapshots (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        packageName TEXT NOT NULL,
+                        appName TEXT NOT NULL,
+                        capturedAt INTEGER NOT NULL,
+                        formattedDate TEXT NOT NULL,
+                        grantedPermissionsJson TEXT NOT NULL,
+                        appOpsStatesJson TEXT NOT NULL,
+                        isBatteryWhitelisted INTEGER NOT NULL,
+                        standbyBucket INTEGER NOT NULL,
+                        snapshotReason TEXT NOT NULL
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_permission_snapshots_packageName_capturedAt ON permission_snapshots (packageName, capturedAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_permission_snapshots_packageName ON permission_snapshots (packageName)")
             }
         }
     }

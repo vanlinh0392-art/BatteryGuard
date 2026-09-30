@@ -65,4 +65,7 @@ object DatabaseModule {
 
     @Provides
     fun provideXiaomiFixSnapshotDao(db: AppDatabase): com.pin.batteryguard.data.db.dao.XiaomiFixSnapshotDao = db.xiaomiFixSnapshotDao()
+
+    @Provides
+    fun providePermissionSnapshotDao(db: AppDatabase): com.pin.batteryguard.data.db.dao.PermissionSnapshotDao = db.permissionSnapshotDao()
 }
