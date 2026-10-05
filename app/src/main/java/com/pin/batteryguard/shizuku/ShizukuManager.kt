@@ -1,5 +1,6 @@
 package com.pin.batteryguard.shizuku
 
+import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.Settings
@@ -410,8 +411,10 @@ class ShizukuManager @Inject constructor(
         val hasSecure = hasWriteSecureSettings()
         val hasStats = context.checkSelfPermission("android.permission.BATTERY_STATS") == PackageManager.PERMISSION_GRANTED
         val hasDump = context.checkSelfPermission("android.permission.DUMP") == PackageManager.PERMISSION_GRANTED
+        val hasDnd = (context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager)?.isNotificationPolicyAccessGranted == true
+        val hasWriteSettings = Settings.System.canWrite(context)
 
-        if (hasSecure && hasStats && hasDump) {
+        if (hasSecure && hasStats && hasDump && hasDnd && hasWriteSettings) {
             permissionsGranted = true
             onCompleted?.invoke(true)
             return
@@ -433,13 +436,6 @@ class ShizukuManager @Inject constructor(
                     permsToGrant.add("android.permission.WRITE_SECURE_SETTINGS")
                 }
 
-                if (permsToGrant.isEmpty()) {
-                    android.util.Log.d("ShizukuManager", "✅ Tất cả quyền đã được cấp, bỏ qua grant")
-                    permissionsGranted = true
-                    onCompleted?.invoke(true)
-                    return@launch
-                }
-
                 var successCount = 0
                 for (perm in permsToGrant) {
                     val result = executeShizukuCommandWithTimeout(arrayOf("pm", "grant", packageName, perm), timeoutMs = 5000L)
@@ -449,6 +445,11 @@ class ShizukuManager @Inject constructor(
                         android.util.Log.w("ShizukuManager", "⚠️ Không thể cấp quyền $perm: ${result.stderr}")
                     }
                 }
+
+                // Cấp quyền DND và WRITE_SETTINGS qua appops / cmd
+                executeShizukuCommandWithTimeout(arrayOf("appops", "set", packageName, "ACCESS_NOTIFICATION_POLICY", "allow"), timeoutMs = 3000L)
+                executeShizukuCommandWithTimeout(arrayOf("cmd", "notification", "allow_dnd", packageName), timeoutMs = 3000L)
+                executeShizukuCommandWithTimeout(arrayOf("appops", "set", packageName, "WRITE_SETTINGS", "allow"), timeoutMs = 3000L)
 
                 val secureGranted = hasWriteSecureSettings()
                 android.util.Log.d("ShizukuManager", "✅ Đã grant qua Shizuku. WRITE_SECURE_SETTINGS = $secureGranted")

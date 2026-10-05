@@ -98,6 +98,7 @@ data class OvernightChargingParams(
 data class LowBatterySaverParams(
     val thresholdPercent: Int = 20,
     val dimDisplayBrightness: Boolean = true,
+    val capRefreshRate60Hz: Boolean = true,
     val enableSystemPowerSaver: Boolean = true,
     val turnOffAodAndRadios: Boolean = true,
     val restrictBackgroundSync: Boolean = true
@@ -110,7 +111,8 @@ data class DeepScreenOffParams(
     val delayMinutes: Int = 3,
     val forceStopBackgroundDrainers: Boolean = true,
     val enableDeepDoze: Boolean = true,
-    val turnOffHotspotIfIdle: Boolean = true
+    val turnOffHotspotIfIdle: Boolean = true,
+    val restoreBrightnessOnScreenOn: Boolean = true
 ) : AutomationConfigParams
 
 /**

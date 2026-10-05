@@ -227,7 +227,7 @@ object SystemActionBridge {
     suspend fun setRingerMode(context: Context, mode: RingerTargetMode) {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val targetMode = if (mode == RingerTargetMode.SILENT) AudioManager.RINGER_MODE_SILENT else AudioManager.RINGER_MODE_VIBRATE
-        val modeCode = if (mode == RingerTargetMode.SILENT) "0" else "1"
+        val modeStr = if (mode == RingerTargetMode.SILENT) "SILENT" else "VIBRATE"
 
         tryDirectThenFallback(
             actionName = "SetRingerMode_$mode",
@@ -247,31 +247,99 @@ object SystemActionBridge {
                 false
             },
             fallbackAction = {
-                executeShizukuCommandWithTimeout(arrayOf("cmd", "audio", "set-ringer-mode", modeCode), 3000L)
+                val zenValue = if (mode == RingerTargetMode.SILENT) "2" else "1"
+                executeShizukuCommandWithTimeout(arrayOf("settings", "put", "global", "zen_mode", zenValue), 2000L)
+                executeShizukuCommandWithTimeout(arrayOf("cmd", "audio", "set-ringer-mode", modeStr), 3000L)
             }
         )
     }
 
     suspend fun setNormalRingerMode(context: Context) {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
 
         tryDirectThenFallback(
             actionName = "SetNormalRingerMode",
             directAction = {
-                // Tắt Zen Mode nếu có quyền
+                var directSuccess = false
+                val cr = context.contentResolver
+
+                // Thoát DND qua NotificationManager nếu có quyền NotificationPolicyAccess
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && hasNotificationPolicyAccess(context) && notificationManager != null) {
+                    try {
+                        notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Không thể setInterruptionFilter: ${e.message}")
+                    }
+                }
+
+                // Ghi zen_mode và mode_ringer qua WRITE_SECURE_SETTINGS
                 if (hasWriteSecureSettings(context)) {
-                    Settings.Global.putInt(context.contentResolver, "zen_mode", 0)
+                    try {
+                        Settings.Global.putInt(cr, "zen_mode", 0)
+                        Settings.Global.putInt(cr, "mode_ringer", 2)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Không thể ghi zen_mode / mode_ringer: ${e.message}")
+                    }
                 }
 
                 if (hasNotificationPolicyAccess(context) || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-                    audioManager.ringerMode = AudioManager.RINGER_MODE_NORMAL
-                    true
+                    try {
+                        audioManager.ringerMode = AudioManager.RINGER_MODE_NORMAL
+                        val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_RING)
+                        val curVol = audioManager.getStreamVolume(AudioManager.STREAM_RING)
+                        if (curVol == 0 && maxVol > 0) {
+                            audioManager.setStreamVolume(AudioManager.STREAM_RING, (maxVol / 2).coerceAtLeast(1), 0)
+                        }
+                        directSuccess = true
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Lỗi khi gán AudioManager.ringerMode NORMAL: ${e.message}")
+                    }
+                }
+
+                directSuccess
+            },
+            fallbackAction = {
+                executeShizukuCommandWithTimeout(arrayOf("cmd", "notification", "set_dnd", "off"), 2000L)
+                executeShizukuCommandWithTimeout(arrayOf("settings", "put", "global", "zen_mode", "0"), 2000L)
+                executeShizukuCommandWithTimeout(arrayOf("settings", "put", "global", "mode_ringer", "2"), 2000L)
+                executeShizukuCommandWithTimeout(arrayOf("cmd", "audio", "set-ringer-mode", "NORMAL"), 2000L)
+                executeShizukuCommandWithTimeout(arrayOf("cmd", "media_session", "volume", "--stream", "2", "--set", "7"), 2000L)
+            }
+        )
+    }
+
+    /**
+     * Lấy độ sáng màn hình hiện tại (0 - 255)
+     */
+    fun getScreenBrightness(context: Context): Int {
+        return try {
+            Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128)
+        } catch (_: Exception) {
+            128
+        }
+    }
+
+    /**
+     * Điều chỉnh độ sáng màn hình (2-Tier: WRITE_SETTINGS -> Shizuku)
+     */
+    suspend fun setScreenBrightness(context: Context, brightness: Int) {
+        val clamped = brightness.coerceIn(15, 255)
+        tryDirectThenFallback(
+            actionName = "SetScreenBrightness_$clamped",
+            directAction = {
+                if (hasWriteSettings(context)) {
+                    val cr = context.contentResolver
+                    Settings.System.putInt(cr, Settings.System.SCREEN_BRIGHTNESS, clamped)
                 } else {
                     false
                 }
             },
             fallbackAction = {
-                executeShizukuCommandWithTimeout(arrayOf("cmd", "audio", "set-ringer-mode", "2"), 3000L)
+                executeShizukuCommandWithTimeout(
+                    arrayOf("settings", "put", "system", "screen_brightness", clamped.toString()),
+                    2000L
+                )
             }
         )
     }

@@ -77,6 +77,13 @@ class AutomationCoordinator @Inject constructor(
     private var hasNotifiedOvernightCharging = false
     private var lastScreenOffTime = 0L
 
+    // Cache độ sáng độc lập cho từng module chống xung đột trạng thái (ARC Architect Fix)
+    private var cachedBrightnessForBatterySaver: Int? = null
+    private var cachedBrightnessForScreenOff: Int? = null
+
+    // Cờ nhớ trạng thái chuông đã áp dụng để chống gọi thừa IPC shell khi bật màn hình (Idempotency)
+    private var lastAppliedRingerIsNight: Boolean? = null
+
     // C2: Guard flag chống coroutine flooding khi pin yếu
     @Volatile private var isPowerSaverApplied = false
 
@@ -124,7 +131,9 @@ class AutomationCoordinator @Inject constructor(
     private fun cancelRingerAlarm() {
         try {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val intent = Intent(ACTION_RINGER_SCHEDULE_TRIGGER)
+            val intent = Intent(ACTION_RINGER_SCHEDULE_TRIGGER).apply {
+                setPackage(context.packageName)
+            }
             val pendingIntent = PendingIntent.getBroadcast(
                 context,
                 RINGER_ALARM_REQUEST_CODE,
@@ -337,7 +346,7 @@ class AutomationCoordinator @Inject constructor(
         } catch (_: Exception) {}
     }
 
-    fun evaluateRingerSchedule() {
+    fun evaluateRingerSchedule(force: Boolean = false) {
         if (!currentConfig.isMasterEnabled || !currentConfig.dayNightRingerEnabled) return
 
         val p = currentConfig.dayNightRingerParams
@@ -357,9 +366,14 @@ class AutomationCoordinator @Inject constructor(
             currentMinutes in startMinutes until endMinutes
         }
 
+        val shouldApplyAction = force || (lastAppliedRingerIsNight != isNightTime)
+        lastAppliedRingerIsNight = isNightTime
+
         scope?.launch(Dispatchers.IO) {
             if (isNightTime) {
-                SystemActionBridge.setRingerMode(context, p.nightMode)
+                if (shouldApplyAction) {
+                    SystemActionBridge.setRingerMode(context, p.nightMode)
+                }
 
                 updateRuleState(
                     AutomationRuleId.DAY_NIGHT_RINGER,
@@ -368,7 +382,9 @@ class AutomationCoordinator @Inject constructor(
                     "Khung giờ: ${String.format("%02d:%02d", p.startHour, p.startMinute)} - ${String.format("%02d:%02d", p.endHour, p.endMinute)}"
                 )
             } else {
-                SystemActionBridge.setNormalRingerMode(context)
+                if (shouldApplyAction) {
+                    SystemActionBridge.setNormalRingerMode(context)
+                }
 
                 updateRuleState(
                     AutomationRuleId.DAY_NIGHT_RINGER,
@@ -405,7 +421,9 @@ class AutomationCoordinator @Inject constructor(
 
         try {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val intent = Intent(ACTION_RINGER_SCHEDULE_TRIGGER)
+            val intent = Intent(ACTION_RINGER_SCHEDULE_TRIGGER).apply {
+                setPackage(context.packageName)
+            }
             val pendingIntent = PendingIntent.getBroadcast(
                 context,
                 RINGER_ALARM_REQUEST_CODE,
@@ -413,12 +431,22 @@ class AutomationCoordinator @Inject constructor(
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
+            val canScheduleExact = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                alarmManager.canScheduleExactAlarms()
+            } else {
+                true
+            }
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, nextTriggerTime, pendingIntent)
+                if (canScheduleExact) {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, nextTriggerTime, pendingIntent)
+                } else {
+                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, nextTriggerTime, pendingIntent)
+                }
             } else {
                 alarmManager.set(AlarmManager.RTC_WAKEUP, nextTriggerTime, pendingIntent)
             }
-            Log.d(TAG, "⏰ Đã lên lịch ringer alarm tiếp theo lúc: ${java.util.Date(nextTriggerTime)}")
+            Log.d(TAG, "⏰ Đã lên lịch ringer alarm tiếp theo lúc: ${java.util.Date(nextTriggerTime)} (exact=$canScheduleExact)")
         } catch (e: Exception) {
             Log.w(TAG, "Không thể lập lịch alarm ringer: ${e.message}")
         }
@@ -434,6 +462,10 @@ class AutomationCoordinator @Inject constructor(
         isCurrentlyCharging = charging
 
         if (!currentConfig.isMasterEnabled) return
+
+        if (chargingStateChanged && currentConfig.dayNightRingerEnabled) {
+            evaluateRingerSchedule()
+        }
 
         if (!charging) {
             hasNotifiedOvernightCharging = false
@@ -477,48 +509,67 @@ class AutomationCoordinator @Inject constructor(
         }
 
         // Module 4: Tự động tiết kiệm pin khi pin yếu
-        if (currentConfig.lowBatterySaverEnabled) {
-            val saverParams = currentConfig.lowBatterySaverParams
-            val threshold = saverParams.thresholdPercent
-            if (!charging && level <= threshold) {
-                if (!isPowerSaverApplied) {
-                    isPowerSaverApplied = true
-                    scope?.launch(Dispatchers.IO) {
-                        if (saverParams.enableSystemPowerSaver) {
-                            SystemActionBridge.setPowerSaveMode(context, enable = true)
+        evaluateLowBatterySaver(level, charging, chargingStateChanged)
+    }
+
+    private fun evaluateLowBatterySaver(level: Int, charging: Boolean, chargingStateChanged: Boolean) {
+        if (!currentConfig.lowBatterySaverEnabled) return
+
+        val saverParams = currentConfig.lowBatterySaverParams
+        val threshold = saverParams.thresholdPercent
+        if (!charging && level <= threshold) {
+            if (!isPowerSaverApplied) {
+                isPowerSaverApplied = true
+                scope?.launch(Dispatchers.IO) {
+                    if (saverParams.enableSystemPowerSaver) {
+                        SystemActionBridge.setPowerSaveMode(context, enable = true)
+                    }
+                    if (saverParams.dimDisplayBrightness) {
+                        val current = SystemActionBridge.getScreenBrightness(context)
+                        if (cachedBrightnessForBatterySaver == null) {
+                            cachedBrightnessForBatterySaver = current
                         }
-                        if (saverParams.dimDisplayBrightness) {
-                            SystemActionBridge.setDisplayRefreshRate60Hz(context)
-                        }
+                        val dimmed = (current * 0.7f).toInt().coerceAtLeast(15)
+                        SystemActionBridge.setScreenBrightness(context, dimmed)
+                    }
+                    if (saverParams.capRefreshRate60Hz) {
+                        SystemActionBridge.setDisplayRefreshRate60Hz(context)
                     }
                 }
+            }
+            updateRuleState(
+                AutomationRuleId.LOW_BATTERY_SAVER,
+                RuleActiveStatus.ACTIVE,
+                "Đã kích hoạt Tiết kiệm pin (${level}%)",
+                "Tự động bật Tiết kiệm pin & hạ màn hình 60Hz"
+            )
+        } else if (charging || level > threshold) {
+            if (isPowerSaverApplied) {
+                isPowerSaverApplied = false
+                scope?.launch(Dispatchers.IO) {
+                    SystemActionBridge.setPowerSaveMode(context, enable = false)
+                    cachedBrightnessForBatterySaver?.let { restoreBright ->
+                        SystemActionBridge.setScreenBrightness(context, restoreBright)
+                        cachedBrightnessForBatterySaver = null
+                    }
+                }
+            }
+            if (charging && chargingStateChanged) {
                 updateRuleState(
                     AutomationRuleId.LOW_BATTERY_SAVER,
-                    RuleActiveStatus.ACTIVE,
-                    "Đã kích hoạt Tiết kiệm pin (${level}%)",
-                    "Tự động bật Tiết kiệm pin & hạ màn hình 60Hz"
+                    RuleActiveStatus.IDLE,
+                    "Bình thường (Đang sạc)",
+                    "Ngưỡng kích hoạt: ≤ $threshold%"
                 )
-            } else if (charging || level > threshold) {
-                if (isPowerSaverApplied) {
-                    isPowerSaverApplied = false
-                    scope?.launch(Dispatchers.IO) {
-                        SystemActionBridge.setPowerSaveMode(context, enable = false)
-                    }
-                }
-                if (charging && chargingStateChanged) {
-                    updateRuleState(
-                        AutomationRuleId.LOW_BATTERY_SAVER,
-                        RuleActiveStatus.IDLE,
-                        "Bình thường (Đang sạc)",
-                        "Ngưỡng kích hoạt: ≤ $threshold%"
-                    )
-                }
             }
         }
     }
 
     fun onScreenOff() {
         lastScreenOffTime = System.currentTimeMillis()
+        if (currentConfig.deepScreenOffEnabled && currentConfig.deepScreenOffParams.restoreBrightnessOnScreenOn) {
+            cachedBrightnessForScreenOff = SystemActionBridge.getScreenBrightness(context)
+        }
         if (!currentConfig.isMasterEnabled || !currentConfig.deepScreenOffEnabled) return
 
         val deepParams = currentConfig.deepScreenOffParams
@@ -548,7 +599,29 @@ class AutomationCoordinator @Inject constructor(
 
     fun onScreenOn() {
         screenOffDozeJob?.cancel()
+
+        // Lưới an toàn 0% hao pin: Gọi ngay evaluateRingerSchedule() khi bật màn hình
+        if (currentConfig.isMasterEnabled && currentConfig.dayNightRingerEnabled) {
+            evaluateRingerSchedule()
+        }
+
         if (currentConfig.deepScreenOffEnabled) {
+            if (currentConfig.deepScreenOffParams.restoreBrightnessOnScreenOn) {
+                scope?.launch(Dispatchers.IO) {
+                    // Nếu đang trong chế độ pin yếu, bảo toàn độ sáng tiết kiệm pin
+                    if (isPowerSaverApplied) return@launch
+
+                    val targetBrightness = cachedBrightnessForScreenOff?.let { cached ->
+                        (cached * 1.3f).toInt().coerceIn(15, 255)
+                    } ?: run {
+                        val current = SystemActionBridge.getScreenBrightness(context)
+                        (current * 1.3f).toInt().coerceIn(current, 255)
+                    }
+                    cachedBrightnessForScreenOff = null
+                    SystemActionBridge.setScreenBrightness(context, targetBrightness)
+                }
+            }
+
             // Khôi phục device_idle_constants và Master Sync khi bật màn hình
             scope?.launch(Dispatchers.IO) {
                 try {

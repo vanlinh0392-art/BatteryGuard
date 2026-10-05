@@ -826,6 +826,18 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
+                    Text("Khóa tần số quét màn hình 60Hz", style = MaterialTheme.typography.bodyMedium)
+                    Switch(
+                        checked = config.capRefreshRate60Hz,
+                        onCheckedChange = { onUpdateParams(config.copy(capRefreshRate60Hz = it)) }
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     Text("Bật Chế độ tiết kiệm pin Android", style = MaterialTheme.typography.bodyMedium)
                     Switch(
                         checked = config.enableSystemPowerSaver,
@@ -902,6 +914,25 @@ fun AutomationConfigEditor(
                     Switch(
                         checked = config.enableDeepDoze,
                         onCheckedChange = { onUpdateParams(config.copy(enableDeepDoze = it)) }
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Tự động tăng 30% độ sáng khi mở màn hình", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Khôi phục độ sáng rõ nét khi bật màn hình",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = config.restoreBrightnessOnScreenOn,
+                        onCheckedChange = { onUpdateParams(config.copy(restoreBrightnessOnScreenOn = it)) }
                     )
                 }
             }

@@ -77,6 +77,7 @@ class AutomationDataStore @Inject constructor(
         private val KEY_LOW_BATTERY_ENABLED = booleanPreferencesKey("low_battery_enabled")
         private val KEY_LOW_BATTERY_THRESHOLD = intPreferencesKey("low_battery_threshold")
         private val KEY_LOW_BATTERY_DIM = booleanPreferencesKey("low_battery_dim_brightness")
+        private val KEY_LOW_BATTERY_60HZ = booleanPreferencesKey("low_battery_cap_60hz")
         private val KEY_LOW_BATTERY_POWER_SAVER = booleanPreferencesKey("low_battery_system_power_saver")
         private val KEY_LOW_BATTERY_AOD = booleanPreferencesKey("low_battery_turn_off_aod")
         private val KEY_LOW_BATTERY_SYNC = booleanPreferencesKey("low_battery_restrict_sync")
@@ -87,6 +88,7 @@ class AutomationDataStore @Inject constructor(
         private val KEY_SCREEN_OFF_FORCE_STOP = booleanPreferencesKey("screen_off_force_stop")
         private val KEY_SCREEN_OFF_DEEP_DOZE = booleanPreferencesKey("screen_off_deep_doze")
         private val KEY_SCREEN_OFF_HOTSPOT = booleanPreferencesKey("screen_off_hotspot")
+        private val KEY_SCREEN_OFF_RESTORE_BRIGHTNESS = booleanPreferencesKey("screen_off_restore_brightness")
     }
 
     val configFlow: Flow<AutomationMasterConfig> = context.automationDataStore.data.map { prefs ->
@@ -134,6 +136,7 @@ class AutomationDataStore @Inject constructor(
             lowBatterySaverParams = LowBatterySaverParams(
                 thresholdPercent = prefs[KEY_LOW_BATTERY_THRESHOLD] ?: 20,
                 dimDisplayBrightness = prefs[KEY_LOW_BATTERY_DIM] ?: true,
+                capRefreshRate60Hz = prefs[KEY_LOW_BATTERY_60HZ] ?: true,
                 enableSystemPowerSaver = prefs[KEY_LOW_BATTERY_POWER_SAVER] ?: true,
                 turnOffAodAndRadios = prefs[KEY_LOW_BATTERY_AOD] ?: true,
                 restrictBackgroundSync = prefs[KEY_LOW_BATTERY_SYNC] ?: true
@@ -143,7 +146,8 @@ class AutomationDataStore @Inject constructor(
                 delayMinutes = prefs[KEY_SCREEN_OFF_DELAY] ?: 3,
                 forceStopBackgroundDrainers = prefs[KEY_SCREEN_OFF_FORCE_STOP] ?: true,
                 enableDeepDoze = prefs[KEY_SCREEN_OFF_DEEP_DOZE] ?: true,
-                turnOffHotspotIfIdle = prefs[KEY_SCREEN_OFF_HOTSPOT] ?: true
+                turnOffHotspotIfIdle = prefs[KEY_SCREEN_OFF_HOTSPOT] ?: true,
+                restoreBrightnessOnScreenOn = prefs[KEY_SCREEN_OFF_RESTORE_BRIGHTNESS] ?: true
             ),
             autoSortActiveToTop = prefs[KEY_AUTO_SORT_ACTIVE] ?: true
         )
@@ -208,6 +212,7 @@ class AutomationDataStore @Inject constructor(
         context.automationDataStore.edit { prefs ->
             prefs[KEY_LOW_BATTERY_THRESHOLD] = params.thresholdPercent
             prefs[KEY_LOW_BATTERY_DIM] = params.dimDisplayBrightness
+            prefs[KEY_LOW_BATTERY_60HZ] = params.capRefreshRate60Hz
             prefs[KEY_LOW_BATTERY_POWER_SAVER] = params.enableSystemPowerSaver
             prefs[KEY_LOW_BATTERY_AOD] = params.turnOffAodAndRadios
             prefs[KEY_LOW_BATTERY_SYNC] = params.restrictBackgroundSync
@@ -220,6 +225,7 @@ class AutomationDataStore @Inject constructor(
             prefs[KEY_SCREEN_OFF_FORCE_STOP] = params.forceStopBackgroundDrainers
             prefs[KEY_SCREEN_OFF_DEEP_DOZE] = params.enableDeepDoze
             prefs[KEY_SCREEN_OFF_HOTSPOT] = params.turnOffHotspotIfIdle
+            prefs[KEY_SCREEN_OFF_RESTORE_BRIGHTNESS] = params.restoreBrightnessOnScreenOn
         }
     }
 }
