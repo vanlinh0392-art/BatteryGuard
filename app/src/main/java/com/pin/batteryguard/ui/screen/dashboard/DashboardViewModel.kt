@@ -6,8 +6,10 @@ import android.content.IntentFilter
 import android.os.BatteryManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pin.batteryguard.data.db.dao.FrozenAppDao
 import com.pin.batteryguard.data.db.entity.BatteryLog
 import com.pin.batteryguard.data.db.entity.ForceStopLog
+import com.pin.batteryguard.data.db.entity.FrozenApp
 import com.pin.batteryguard.data.preferences.SettingsDataStore
 import com.pin.batteryguard.data.repository.AppRepository
 import com.pin.batteryguard.data.repository.BatteryRepository
@@ -41,7 +43,8 @@ data class DashboardUiState(
     val topDrainingApps: List<AppBatteryInfo> = emptyList(),
     val batteryHistory: List<com.pin.batteryguard.data.db.entity.BatteryLog> = emptyList(),
     val recentForceStopLogs: List<com.pin.batteryguard.data.db.entity.ForceStopLog> = emptyList(),
-    val isSetupCompleted: Boolean? = null
+    val isSetupCompleted: Boolean? = null,
+    val actionResult: String? = null
 )
 
 @HiltViewModel
@@ -51,7 +54,8 @@ class DashboardViewModel @Inject constructor(
     private val appRepository: AppRepository,
     private val settingsDataStore: SettingsDataStore,
     private val shizukuManager: ShizukuManager,
-    private val forceStopManager: ForceStopManager
+    private val forceStopManager: ForceStopManager,
+    private val frozenAppDao: FrozenAppDao
 ) : ViewModel() {
 
     private val _batteryState = MutableStateFlow(BatteryState())
@@ -352,6 +356,13 @@ class DashboardViewModel @Inject constructor(
             }
             val actionRes = result.getOrNull()
             if (result.isSuccess || actionRes?.commandSucceeded == true) {
+                if (isFrozen) {
+                    frozenAppDao.delete(app.packageName, app.userId)
+                    _uiState.update { it.copy(actionResult = "Đã rã đông ${app.appName}") }
+                } else {
+                    frozenAppDao.insert(FrozenApp(app.userId, app.packageName, app.appName, isManual = true))
+                    _uiState.update { it.copy(actionResult = "Đã đóng băng ${app.appName}") }
+                }
                 batteryRepository.insertForceStopLog(
                     ForceStopLog(
                         packageName = app.packageName,
@@ -370,8 +381,14 @@ class DashboardViewModel @Inject constructor(
                     )
                 )
                 loadTopDrainingApps()
+            } else {
+                _uiState.update { it.copy(actionResult = "Lỗi thao tác đóng băng/rã đông") }
             }
         }
+    }
+
+    fun clearActionResult() {
+        _uiState.update { it.copy(actionResult = null) }
     }
 
     fun addToException(packageName: String, appName: String) {

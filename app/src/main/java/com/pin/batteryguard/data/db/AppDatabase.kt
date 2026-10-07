@@ -33,7 +33,7 @@ import com.pin.batteryguard.data.db.entity.UidBaseline
         com.pin.batteryguard.data.db.entity.XiaomiFixSnapshotEntity::class,
         com.pin.batteryguard.data.db.entity.PermissionSnapshotEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -61,7 +61,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     DATABASE_NAME
-                ).addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build()
+                ).addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8).build()
                 INSTANCE = instance
                 instance
             }
@@ -172,6 +172,12 @@ abstract class AppDatabase : RoomDatabase() {
                 """.trimIndent())
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_permission_snapshots_packageName_capturedAt ON permission_snapshots (packageName, capturedAt)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_permission_snapshots_packageName ON permission_snapshots (packageName)")
+            }
+        }
+
+        val MIGRATION_7_8 = object : androidx.room.migration.Migration(7, 8) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE frozen_apps ADD COLUMN isManual INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

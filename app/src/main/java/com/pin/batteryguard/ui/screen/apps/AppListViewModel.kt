@@ -4,7 +4,9 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pin.batteryguard.data.db.dao.FrozenAppDao
 import com.pin.batteryguard.data.db.entity.ForceStopLog
+import com.pin.batteryguard.data.db.entity.FrozenApp
 import com.pin.batteryguard.data.repository.AppRepository
 import com.pin.batteryguard.data.repository.BatteryRepository
 import com.pin.batteryguard.domain.model.AppBatteryInfo
@@ -42,7 +44,8 @@ class AppListViewModel @Inject constructor(
     private val batteryRepository: BatteryRepository,
     private val forceStopManager: ForceStopManager,
     private val uidPackageResolver: UidPackageResolver,
-    private val settingsDataStore: SettingsDataStore
+    private val settingsDataStore: SettingsDataStore,
+    private val frozenAppDao: FrozenAppDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AppListUiState())
@@ -293,6 +296,11 @@ class AppListViewModel @Inject constructor(
             }
             val actionRes = result.getOrNull()
             if (result.isSuccess || actionRes?.commandSucceeded == true) {
+                if (isFrozen) {
+                    frozenAppDao.delete(app.packageName, app.userId)
+                } else {
+                    frozenAppDao.insert(FrozenApp(app.userId, app.packageName, app.appName, isManual = true))
+                }
                 batteryRepository.insertForceStopLog(
                     ForceStopLog(
                         packageName = app.packageName,

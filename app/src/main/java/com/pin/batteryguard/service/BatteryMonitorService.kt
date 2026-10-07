@@ -309,8 +309,11 @@ class BatteryMonitorService : LifecycleService() {
                 if ((decision.action == DetectionAction.FORCE_STOP || decision.action == DetectionAction.FREEZE) && isScreenOff()) {
                     performedAction = true
                     actionResult = if (decision.action == DetectionAction.FREEZE) {
-                        frozenAppDao.insert(FrozenApp(sample.userId, primaryPackage, appName))
-                        forceStopManager.freezeDetailed(primaryPackage, sample.userId)
+                        val res = forceStopManager.freezeDetailed(primaryPackage, sample.userId)
+                        if (res.isSuccess || res.commandSucceeded) {
+                            frozenAppDao.insert(FrozenApp(sample.userId, primaryPackage, appName, isManual = false))
+                        }
+                        res
                     } else {
                         forceStopManager.forceStopDetailed(primaryPackage, sample.userId)
                     }
@@ -405,13 +408,22 @@ class BatteryMonitorService : LifecycleService() {
 
     private suspend fun freezeDeepSleepApps() {
         val exceptions = appRepository.getExceptionPackages()
-        frozenAppDao.getAll().forEach { app ->
-            if (app.packageName !in exceptions) forceStopManager.freezeDetailed(app.packageName, app.userId)
+        frozenAppDao.getAll().filter { it.isManual && it.packageName !in exceptions }.forEach { app ->
+            if (!forceStopManager.isPackageFrozen(app.packageName, app.userId)) {
+                forceStopManager.freezeDetailed(app.packageName, app.userId)
+            }
         }
     }
 
     private suspend fun unfreezeDeepSleepApps() {
-        frozenAppDao.getAll().forEach { app -> forceStopManager.unfreezeDetailed(app.packageName, app.userId) }
+        // CHỈ rã đông các app tự động ngầm (!isManual). TUYỆT ĐỐI không rã đông app thủ công của người dùng!
+        val autoApps = frozenAppDao.getAll().filter { !it.isManual }
+        for (app in autoApps) {
+            val res = forceStopManager.unfreezeDetailed(app.packageName, app.userId)
+            if (res.isSuccess || res.commandSucceeded) {
+                frozenAppDao.delete(app.packageName, app.userId)
+            }
+        }
     }
 
     private suspend fun coolDownDevice() {

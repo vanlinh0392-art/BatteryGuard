@@ -8,5 +8,6 @@ data class FrozenApp(
     val userId: Int = 0,
     val packageName: String,
     val appName: String,
-    val frozenAt: Long = System.currentTimeMillis()
+    val frozenAt: Long = System.currentTimeMillis(),
+    val isManual: Boolean = false
 )

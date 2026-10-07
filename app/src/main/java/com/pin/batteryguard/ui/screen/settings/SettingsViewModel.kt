@@ -14,6 +14,7 @@ import com.pin.batteryguard.shizuku.ShizukuManager
 import com.pin.batteryguard.shizuku.ShizukuStatus
 import com.pin.batteryguard.updater.AppUpdateInfo
 import com.pin.batteryguard.updater.AppUpdateManager
+import com.pin.batteryguard.util.PackageHelper
 import com.pin.batteryguard.util.XiaomiHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -113,12 +114,16 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun clearFrozenApps() {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val apps = frozenAppDao.getAll()
-            for (app in apps) {
-                forceStopManager.unfreezePackage(app.packageName, app.userId)
-                frozenAppDao.delete(app.packageName, app.userId)
+        viewModelScope.launch(Dispatchers.IO) {
+            val dbPackages = frozenAppDao.getAll().map { it.packageName }
+            val osFrozen = forceStopManager.listFrozenPackages(0)
+            val allPackages = (dbPackages + osFrozen).distinct().filterNot { PackageHelper.isSystemApp(context, it) }
+
+            if (allPackages.isNotEmpty()) {
+                forceStopManager.batchUnfreeze(allPackages, 0)
             }
+            frozenAppDao.deleteAll()
+            forceStopManager.invalidateFrozenCache()
         }
     }
 

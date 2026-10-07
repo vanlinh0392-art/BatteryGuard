@@ -23,4 +23,13 @@ interface FrozenAppDao {
 
     @Query("SELECT EXISTS(SELECT 1 FROM frozen_apps WHERE packageName = :packageName AND userId = :userId)")
     suspend fun isFrozen(packageName: String, userId: Int = 0): Boolean
+
+    @Query("DELETE FROM frozen_apps")
+    suspend fun deleteAll()
+
+    @Query("SELECT * FROM frozen_apps WHERE userId = :userId AND isManual = 0")
+    suspend fun getAutoFrozenApps(userId: Int = 0): List<FrozenApp>
+
+    @Query("SELECT * FROM frozen_apps WHERE userId = :userId")
+    suspend fun getAllForUser(userId: Int = 0): List<FrozenApp>
 }
