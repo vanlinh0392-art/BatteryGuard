@@ -72,6 +72,7 @@ import com.pin.batteryguard.ui.theme.Green40
 import com.pin.batteryguard.ui.theme.Green80
 import com.pin.batteryguard.ui.theme.Teal40
 import com.pin.batteryguard.ui.theme.Teal80
+import kotlin.math.roundToInt
 
 /**
  * Thẻ Automation Card trực quan phong cách Smart Home (HomeKit / SmartThings)
@@ -923,7 +924,7 @@ fun AutomationConfigEditor(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Tự động tăng 30% độ sáng khi mở màn hình", style = MaterialTheme.typography.bodyMedium)
+                        Text("Tự động tăng ${config.screenOnBrightnessIncreasePercent}% độ sáng khi mở màn hình", style = MaterialTheme.typography.bodyMedium)
                         Text(
                             "Khôi phục độ sáng rõ nét khi bật màn hình",
                             style = MaterialTheme.typography.bodySmall,
@@ -934,6 +935,53 @@ fun AutomationConfigEditor(
                         checked = config.restoreBrightnessOnScreenOn,
                         onCheckedChange = { onUpdateParams(config.copy(restoreBrightnessOnScreenOn = it)) }
                     )
+                }
+
+                AnimatedVisibility(visible = config.restoreBrightnessOnScreenOn) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Mức tăng khi bật sáng:",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Text(
+                                text = "+${config.screenOnBrightnessIncreasePercent}%",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
+
+                        Slider(
+                            value = config.screenOnBrightnessIncreasePercent.toFloat(),
+                            onValueChange = { onUpdateParams(config.copy(screenOnBrightnessIncreasePercent = it.roundToInt())) },
+                            valueRange = 5f..30f,
+                            steps = 24,
+                            colors = SliderDefaults.colors(
+                                thumbColor = MaterialTheme.colorScheme.primary,
+                                activeTrackColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(5, 10, 15, 20, 30).forEach { p ->
+                                FilterChip(
+                                    selected = config.screenOnBrightnessIncreasePercent == p,
+                                    onClick = { onUpdateParams(config.copy(screenOnBrightnessIncreasePercent = p)) },
+                                    label = { Text("+$p%", fontSize = 11.5.sp) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        selectedLabelColor = MaterialTheme.colorScheme.primary
+                                    )
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

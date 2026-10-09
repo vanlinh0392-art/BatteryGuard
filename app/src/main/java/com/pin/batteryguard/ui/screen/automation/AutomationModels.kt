@@ -112,7 +112,8 @@ data class DeepScreenOffParams(
     val forceStopBackgroundDrainers: Boolean = true,
     val enableDeepDoze: Boolean = true,
     val turnOffHotspotIfIdle: Boolean = true,
-    val restoreBrightnessOnScreenOn: Boolean = true
+    val restoreBrightnessOnScreenOn: Boolean = true,
+    val screenOnBrightnessIncreasePercent: Int = 10
 ) : AutomationConfigParams
 
 /**

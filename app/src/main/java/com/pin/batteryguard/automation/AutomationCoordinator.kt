@@ -79,7 +79,10 @@ class AutomationCoordinator @Inject constructor(
 
     // Cache độ sáng độc lập cho từng module chống xung đột trạng thái (ARC Architect Fix)
     private var cachedBrightnessForBatterySaver: Int? = null
-    private var cachedBrightnessForScreenOff: Int? = null
+    @Volatile private var cachedBrightnessForScreenOff: Int? = null
+    @Volatile private var lastPreBoostBrightness: Int? = null
+    @Volatile private var lastBoostedBrightness: Int? = null
+    @Volatile private var lastBoostTimestamp = 0L
 
     // Cờ nhớ trạng thái chuông đã áp dụng để chống gọi thừa IPC shell khi bật màn hình (Idempotency)
     private var lastAppliedRingerIsNight: Boolean? = null
@@ -568,7 +571,14 @@ class AutomationCoordinator @Inject constructor(
     fun onScreenOff() {
         lastScreenOffTime = System.currentTimeMillis()
         if (currentConfig.deepScreenOffEnabled && currentConfig.deepScreenOffParams.restoreBrightnessOnScreenOn) {
-            cachedBrightnessForScreenOff = SystemActionBridge.getScreenBrightness(context)
+            val current = SystemActionBridge.getScreenBrightness(context)
+            val isImmediateReflap = (System.currentTimeMillis() - lastBoostTimestamp < 3000L) && (current == lastBoostedBrightness)
+            if (isImmediateReflap && lastPreBoostBrightness != null) {
+                // Chống leo thang độ sáng khi đóng/mở máy liên tục: bảo toàn mức độ sáng gốc ban đầu
+                cachedBrightnessForScreenOff = lastPreBoostBrightness
+            } else {
+                cachedBrightnessForScreenOff = current
+            }
         }
         if (!currentConfig.isMasterEnabled || !currentConfig.deepScreenOffEnabled) return
 
@@ -611,12 +621,13 @@ class AutomationCoordinator @Inject constructor(
                     // Nếu đang trong chế độ pin yếu, bảo toàn độ sáng tiết kiệm pin
                     if (isPowerSaverApplied) return@launch
 
-                    val targetBrightness = cachedBrightnessForScreenOff?.let { cached ->
-                        (cached * 1.3f).toInt().coerceIn(15, 255)
-                    } ?: run {
-                        val current = SystemActionBridge.getScreenBrightness(context)
-                        (current * 1.3f).toInt().coerceIn(current, 255)
-                    }
+                    val baseBrightness = cachedBrightnessForScreenOff ?: SystemActionBridge.getScreenBrightness(context)
+                    lastPreBoostBrightness = baseBrightness
+                    val percent = currentConfig.deepScreenOffParams.screenOnBrightnessIncreasePercent.coerceIn(5, 30)
+                    val factor = 1.0f + (percent / 100.0f)
+                    val targetBrightness = (baseBrightness * factor).toInt().coerceIn(15, 255)
+                    lastBoostedBrightness = targetBrightness
+                    lastBoostTimestamp = System.currentTimeMillis()
                     cachedBrightnessForScreenOff = null
                     SystemActionBridge.setScreenBrightness(context, targetBrightness)
                 }

@@ -89,6 +89,7 @@ class AutomationDataStore @Inject constructor(
         private val KEY_SCREEN_OFF_DEEP_DOZE = booleanPreferencesKey("screen_off_deep_doze")
         private val KEY_SCREEN_OFF_HOTSPOT = booleanPreferencesKey("screen_off_hotspot")
         private val KEY_SCREEN_OFF_RESTORE_BRIGHTNESS = booleanPreferencesKey("screen_off_restore_brightness")
+        private val KEY_SCREEN_OFF_BRIGHTNESS_PERCENT = intPreferencesKey("screen_off_brightness_percent")
     }
 
     val configFlow: Flow<AutomationMasterConfig> = context.automationDataStore.data.map { prefs ->
@@ -147,7 +148,8 @@ class AutomationDataStore @Inject constructor(
                 forceStopBackgroundDrainers = prefs[KEY_SCREEN_OFF_FORCE_STOP] ?: true,
                 enableDeepDoze = prefs[KEY_SCREEN_OFF_DEEP_DOZE] ?: true,
                 turnOffHotspotIfIdle = prefs[KEY_SCREEN_OFF_HOTSPOT] ?: true,
-                restoreBrightnessOnScreenOn = prefs[KEY_SCREEN_OFF_RESTORE_BRIGHTNESS] ?: true
+                restoreBrightnessOnScreenOn = prefs[KEY_SCREEN_OFF_RESTORE_BRIGHTNESS] ?: true,
+                screenOnBrightnessIncreasePercent = (prefs[KEY_SCREEN_OFF_BRIGHTNESS_PERCENT] ?: 10).coerceIn(5, 30)
             ),
             autoSortActiveToTop = prefs[KEY_AUTO_SORT_ACTIVE] ?: true
         )
@@ -226,6 +228,7 @@ class AutomationDataStore @Inject constructor(
             prefs[KEY_SCREEN_OFF_DEEP_DOZE] = params.enableDeepDoze
             prefs[KEY_SCREEN_OFF_HOTSPOT] = params.turnOffHotspotIfIdle
             prefs[KEY_SCREEN_OFF_RESTORE_BRIGHTNESS] = params.restoreBrightnessOnScreenOn
+            prefs[KEY_SCREEN_OFF_BRIGHTNESS_PERCENT] = params.screenOnBrightnessIncreasePercent.coerceIn(5, 30)
         }
     }
 }
