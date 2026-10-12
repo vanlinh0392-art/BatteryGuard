@@ -19,7 +19,9 @@ import com.pin.batteryguard.data.db.entity.FrozenApp
 import com.pin.batteryguard.data.preferences.SettingsDataStore
 import com.pin.batteryguard.data.repository.AppRepository
 import com.pin.batteryguard.data.repository.BatteryRepository
+import com.pin.batteryguard.automation.SystemActionBridge
 import com.pin.batteryguard.data.repository.MonitoringStateStore
+import com.pin.batteryguard.data.settings.SystemSettingsManager
 import com.pin.batteryguard.domain.battery.BatteryDrainDiffer
 import com.pin.batteryguard.domain.battery.DecisionGuard
 import com.pin.batteryguard.domain.battery.DetectionAction
@@ -35,6 +37,7 @@ import com.pin.batteryguard.shizuku.UidPackageResolver
 import com.pin.batteryguard.util.NotificationHelper
 import com.pin.batteryguard.util.PackageHelper
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
@@ -75,6 +78,8 @@ class BatteryMonitorService : LifecycleService() {
     private var lastNotifiedBatteryLevel = -1
     private var lastBatteryLogLevel = -1
     private var lastBatteryLogTime = 0L
+    private var lastKnownLevel = 100
+    private val serviceScope get() = lifecycleScope
 
     override fun onCreate() {
         super.onCreate()
@@ -87,6 +92,7 @@ class BatteryMonitorService : LifecycleService() {
         registerReceivers()
         automationCoordinator.start(lifecycleScope)
         maybeCleanupOldData()
+        SystemSettingsManager.registerGeminiSentinelObserver(this)
 
         lifecycleScope.launch {
             insertBatteryLog()
@@ -131,6 +137,7 @@ class BatteryMonitorService : LifecycleService() {
             },
             onBatteryChanged = { batteryPct, temperature, charging ->
                 lastBatteryTemperature = temperature
+                if (batteryPct in 0..100) lastKnownLevel = batteryPct
                 automationCoordinator.onBatteryChanged(batteryPct, temperature, charging)
                 lifecycleScope.launch {
                     checkTemperatureAlert(temperature)
@@ -142,7 +149,7 @@ class BatteryMonitorService : LifecycleService() {
                             if (charging) pauseMonitoring("charging") else reconcileMonitoringState()
                         }
                     }
-                    if (batteryPct != lastNotifiedBatteryLevel || chargingChanged) {
+                    if ((batteryPct != lastNotifiedBatteryLevel || chargingChanged) && !isScreenOff()) {
                         lastNotifiedBatteryLevel = batteryPct
                         updateNotification(batteryPct)
                     }
@@ -209,6 +216,12 @@ class BatteryMonitorService : LifecycleService() {
         monitoringStateStore.clear()
         unfreezeDeepSleepApps()
         screenOnRestoreComplete = true
+        val currentLevel = getBatteryLevelNow()
+        lastNotifiedBatteryLevel = currentLevel
+        updateNotification(currentLevel)
+        serviceScope.launch(Dispatchers.IO) {
+            SystemSettingsManager.reapplyGeminiIfOverwritten(this@BatteryMonitorService)
+        }
     }
 
     private suspend fun captureNewBaseline() {
@@ -558,11 +571,18 @@ class BatteryMonitorService : LifecycleService() {
     private fun getBatteryLevelNow(): Int {
         val bm = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
         val cap = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
-        if (cap in 0..100) return cap
-        val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-        val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
-        return if (level >= 0 && scale > 0) (level * 100 / scale.toFloat()).toInt() else 100
+        if (cap in 0..100) {
+            lastKnownLevel = cap
+            return cap
+        }
+        return runCatching {
+            val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+            val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
+            val calculated = if (level >= 0 && scale > 0) (level * 100 / scale.toFloat()).toInt() else lastKnownLevel
+            if (calculated in 0..100) lastKnownLevel = calculated
+            calculated
+        }.getOrDefault(lastKnownLevel)
     }
 
     private fun acquireWakeLock() {
@@ -578,9 +598,13 @@ class BatteryMonitorService : LifecycleService() {
     }
 
     override fun onDestroy() {
+        SystemSettingsManager.unregisterGeminiSentinelObserver(this)
         automationCoordinator.stop()
         screenReceiver?.let { runCatching { unregisterReceiver(it) } }
         releaseWakeLock()
+        CoroutineScope(Dispatchers.IO).launch {
+            SystemActionBridge.resetThermalStatus(this@BatteryMonitorService)
+        }
         super.onDestroy()
     }
 

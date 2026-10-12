@@ -8,7 +8,7 @@ class BatteryStatsSnapshotParser {
     private val durationPattern = Regex("(\\d+)(ms|d|h|m|s)")
 
     fun parse(dump: String, capturedAtMillis: Long, capturedAtElapsedRealtime: Long, chargeCounterUah: Long? = null, fallbackCapacityMah: Double = 5000.0): BatteryStatsSnapshot {
-        if (!dump.contains("Estimated power use (mAh):")) return emptySnapshot(capturedAtMillis, capturedAtElapsedRealtime, chargeCounterUah, fallbackCapacityMah)
+        if (!dump.contains("Estimated power use (mAh):")) return emptySnapshot(capturedAtMillis, capturedAtElapsedRealtime, chargeCounterUah, 0.0)
         val lines = dump.lineSequence().toList()
         var capacity = lines.firstNotNullOfOrNull { capacityPattern.find(it)?.groupValues?.get(1)?.toDoubleOrNull() } ?: 0.0
         if (capacity <= 0.0) {

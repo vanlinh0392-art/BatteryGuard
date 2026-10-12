@@ -391,7 +391,7 @@ object SystemActionBridge {
     }
 
     /**
-     * Khóa Tần số quét màn hình 60Hz
+     * Khóa Tần số quét màn hình 60Hz (hỗ trợ AOSP & Xiaomi HyperOS / MIUI)
      */
     suspend fun setDisplayRefreshRate60Hz(context: Context) {
         tryDirectThenFallback(
@@ -402,11 +402,163 @@ object SystemActionBridge {
                 val cr = context.contentResolver
                 val r1 = Settings.System.putFloat(cr, "peak_refresh_rate", 60.0f)
                 val r2 = Settings.System.putFloat(cr, "min_refresh_rate", 60.0f)
-                r1 || r2
+                val r3 = try {
+                    Settings.Secure.putInt(cr, "user_refresh_rate", 60)
+                } catch (_: Exception) {
+                    false
+                }
+                r1 || r2 || r3
             },
             fallbackAction = {
                 executeShizukuCommandWithTimeout(arrayOf("settings", "put", "system", "min_refresh_rate", "60.0"), 2000L)
                 executeShizukuCommandWithTimeout(arrayOf("settings", "put", "system", "peak_refresh_rate", "60.0"), 2000L)
+                executeShizukuCommandWithTimeout(arrayOf("settings", "put", "secure", "user_refresh_rate", "60"), 2000L)
+            }
+        )
+    }
+
+    /**
+     * Khôi phục Tần số quét màn hình về mặc định (120Hz/Auto)
+     */
+    suspend fun restoreDisplayRefreshRate(context: Context) {
+        tryDirectThenFallback(
+            actionName = "RestoreRefreshRate",
+            directAction = {
+                if (!hasWriteSecureSettings(context) && !hasWriteSettings(context)) return@tryDirectThenFallback false
+
+                val cr = context.contentResolver
+                val r1 = Settings.System.putFloat(cr, "peak_refresh_rate", 120.0f)
+                val r2 = Settings.System.putFloat(cr, "min_refresh_rate", 1.0f) // Cho phép LTPO hạ xuống 1Hz
+                val r3 = try {
+                    Settings.Secure.putInt(cr, "user_refresh_rate", 120)
+                } catch (_: Exception) {
+                    false
+                }
+                r1 || r2 || r3
+            },
+            fallbackAction = {
+                executeShizukuCommandWithTimeout(arrayOf("settings", "put", "system", "min_refresh_rate", "1.0"), 2000L)
+                executeShizukuCommandWithTimeout(arrayOf("settings", "put", "system", "peak_refresh_rate", "120.0"), 2000L)
+                executeShizukuCommandWithTimeout(arrayOf("settings", "put", "secure", "user_refresh_rate", "120"), 2000L)
+            }
+        )
+    }
+
+    /**
+     * Bật / Tắt Sạc nhanh phần cứng (Xiaomi HyperCharge 90W)
+     */
+    suspend fun setFastChargingEnabled(context: Context, enable: Boolean) {
+        val flag = if (enable) 1 else 0
+        tryDirectThenFallback(
+            actionName = "SetFastCharging_$enable",
+            directAction = {
+                if (hasWriteSecureSettings(context)) {
+                    val cr = context.contentResolver
+                    Settings.Secure.putInt(cr, "key_fast_charge_enabled", flag)
+                } else {
+                    false
+                }
+            },
+            fallbackAction = {
+                executeShizukuCommandWithTimeout(
+                    arrayOf("settings", "put", "secure", "key_fast_charge_enabled", flag.toString()),
+                    2000L
+                )
+            }
+        )
+    }
+
+    /**
+     * Kiểm tra Sạc nhanh 90W Xiaomi HyperCharge hiện đang Bật hay Tắt trong cài đặt
+     */
+    fun isFastChargingEnabled(context: Context): Boolean {
+        return try {
+            Settings.Secure.getInt(context.contentResolver, "key_fast_charge_enabled", 1) == 1
+        } catch (_: Exception) {
+            true
+        }
+    }
+
+    /**
+     * Ghi đè trạng thái thermal hệ thống qua Shizuku (status 0 = THERMAL_STATUS_NONE)
+     */
+    suspend fun overrideThermalStatus(context: Context, status: Int = 0): Boolean = withContext(Dispatchers.IO) {
+        try {
+            if (Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                val res = executeShizukuCommandWithTimeout(
+                    arrayOf("cmd", "thermalservice", "override-status", status.toString()),
+                    timeoutMs = 2000L
+                )
+                if (res.isSuccess) {
+                    Log.d(TAG, "✅ [Thermal] override-status $status thành công")
+                    return@withContext true
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Lỗi overrideThermalStatus qua Shizuku: ${e.message}")
+        }
+        false
+    }
+
+    /**
+     * Reset trạng thái thermal hệ thống về mặc định qua Shizuku
+     */
+    suspend fun resetThermalStatus(context: Context): Boolean = withContext(Dispatchers.IO) {
+        try {
+            if (Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                val res = executeShizukuCommandWithTimeout(
+                    arrayOf("cmd", "thermalservice", "reset"),
+                    timeoutMs = 2000L
+                )
+                if (res.isSuccess) {
+                    Log.d(TAG, "✅ [Thermal] reset thermal status thành công")
+                    return@withContext true
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Lỗi resetThermalStatus qua Shizuku: ${e.message}")
+        }
+        false
+    }
+
+    /**
+     * Kiểm tra Chế độ Giao diện Tối hệ thống (Dark Mode) hiện tại đang Bật hay Tắt
+     */
+    fun isSystemDarkMode(context: Context): Boolean {
+        val configNight = (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val settingNight = try {
+            Settings.System.getInt(context.contentResolver, "dark_mode_enable", 0) == 1
+        } catch (_: Exception) {
+            false
+        }
+        return configNight || settingNight
+    }
+
+    /**
+     * Bật / Tắt Chế độ Giao diện Tối OLED (Dark Mode hệ thống)
+     */
+    suspend fun setSystemDarkMode(context: Context, enable: Boolean) {
+        val flag = if (enable) 1 else 0
+        val uiModeArg = if (enable) "yes" else "no"
+        tryDirectThenFallback(
+            actionName = "SetDarkMode_$enable",
+            directAction = {
+                if (hasWriteSettings(context)) {
+                    val cr = context.contentResolver
+                    Settings.System.putInt(cr, "dark_mode_enable", flag)
+                } else {
+                    false
+                }
+            },
+            fallbackAction = {
+                executeShizukuCommandWithTimeout(
+                    arrayOf("settings", "put", "system", "dark_mode_enable", flag.toString()),
+                    2000L
+                )
+                executeShizukuCommandWithTimeout(
+                    arrayOf("cmd", "uimode", "night", uiModeArg),
+                    2000L
+                )
             }
         )
     }

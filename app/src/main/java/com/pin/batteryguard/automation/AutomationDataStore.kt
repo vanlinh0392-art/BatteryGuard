@@ -72,6 +72,8 @@ class AutomationDataStore @Inject constructor(
         private val KEY_OVERNIGHT_START_M = intPreferencesKey("overnight_start_min")
         private val KEY_OVERNIGHT_END_H = intPreferencesKey("overnight_end_hour")
         private val KEY_OVERNIGHT_END_M = intPreferencesKey("overnight_end_min")
+        private val KEY_CHARGING_FAST_CHARGE_90W = booleanPreferencesKey("charging_fast_charge_90w")
+        private val KEY_CHARGING_PRIORITIZE_NO_THROTTLE = booleanPreferencesKey("charging_prioritize_no_throttle")
 
         // 4. Low Battery Saver
         private val KEY_LOW_BATTERY_ENABLED = booleanPreferencesKey("low_battery_enabled")
@@ -131,7 +133,10 @@ class AutomationDataStore @Inject constructor(
                 alertSoundOnTarget = prefs[KEY_OVERNIGHT_SOUND] ?: true,
                 preventOverheat = prefs[KEY_OVERNIGHT_OVERHEAT] ?: true,
                 startHour = prefs[KEY_OVERNIGHT_START_H] ?: 22,
-                endHour = prefs[KEY_OVERNIGHT_END_H] ?: 6
+                endHour = prefs[KEY_OVERNIGHT_END_H] ?: 6,
+                fastCharge90WEnabled = prefs[KEY_CHARGING_FAST_CHARGE_90W] ?: true,
+                prioritizeFastChargeNoThrottle = prefs[KEY_CHARGING_PRIORITIZE_NO_THROTTLE] ?: false,
+                criticalThermalLimit = 48.0f
             ),
             lowBatterySaverEnabled = prefs[KEY_LOW_BATTERY_ENABLED] ?: true,
             lowBatterySaverParams = LowBatterySaverParams(
@@ -207,6 +212,8 @@ class AutomationDataStore @Inject constructor(
             prefs[KEY_OVERNIGHT_OVERHEAT] = params.preventOverheat
             prefs[KEY_OVERNIGHT_START_H] = params.startHour
             prefs[KEY_OVERNIGHT_END_H] = params.endHour
+            prefs[KEY_CHARGING_FAST_CHARGE_90W] = params.fastCharge90WEnabled
+            prefs[KEY_CHARGING_PRIORITIZE_NO_THROTTLE] = params.prioritizeFastChargeNoThrottle
         }
     }
 

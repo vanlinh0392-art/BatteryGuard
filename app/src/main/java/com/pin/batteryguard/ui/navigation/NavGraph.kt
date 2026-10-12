@@ -43,6 +43,10 @@ import com.pin.batteryguard.ui.screen.shield.AppShieldScreen
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.outlined.Bolt
 
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.outlined.Tune
+import com.pin.batteryguard.ui.screen.extended.ExtendedSettingsScreen
+
 sealed class Screen(
     val route: String,
     val title: String,
@@ -58,6 +62,7 @@ sealed class Screen(
     data object Setup : Screen("setup", "Thiết lập", Icons.Filled.Settings, Icons.Outlined.Settings)
     data object PermissionGranter : Screen("permission_granter", "Cấp quyền", Icons.Filled.Shield, Icons.Outlined.Shield)
     data object AppShield : Screen("app_shield", "Bảo vệ", Icons.Filled.Shield, Icons.Outlined.Shield)
+    data object ExtendedSettings : Screen("extended_settings", "Cài đặt mở rộng", Icons.Filled.Tune, Icons.Outlined.Tune)
 }
 
 val bottomNavItems = listOf(
@@ -74,9 +79,10 @@ fun BatteryGuardNavHost() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
-    // Ẩn bottom bar ở setup wizard và permission granter
+    // Ẩn bottom bar ở setup wizard, permission granter và extended settings
     val showBottomBar = currentDestination?.route != Screen.Setup.route &&
-            currentDestination?.route != Screen.PermissionGranter.route
+            currentDestination?.route != Screen.PermissionGranter.route &&
+            currentDestination?.route != Screen.ExtendedSettings.route
 
     Scaffold(
         bottomBar = {
@@ -184,12 +190,22 @@ fun BatteryGuardNavHost() {
                     },
                     onNavigateToPermissionGranter = {
                         navController.navigate(Screen.PermissionGranter.route)
+                    },
+                    onNavigateToExtendedSettings = {
+                        navController.navigate(Screen.ExtendedSettings.route)
                     }
                 )
             }
             composable(Screen.PermissionGranter.route) {
                 PermissionGranterScreen(
                     onNavigateBack = {
+                        navController.popBackStack()
+                    }
+                )
+            }
+            composable(Screen.ExtendedSettings.route) {
+                ExtendedSettingsScreen(
+                    onBack = {
                         navController.popBackStack()
                     }
                 )

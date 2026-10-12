@@ -54,7 +54,11 @@ object FastPermissionMapper {
         "XIAOMI_SHOW_WHEN_LOCKED" to Triple("10021", "Hiển thị trên màn hình khóa", "Cho phép ứng dụng hiển thị thông báo/giao diện khi màn hình đang khóa"),
         "XIAOMI_BACKGROUND_START_ACTIVITY" to Triple("10022", "Cửa sổ Pop-up khi chạy ngầm", "Cho phép mở màn hình/cửa sổ khi ứng dụng đang chạy nền"),
         "XIAOMI_POPUP_WINDOW" to Triple("10027", "Cửa sổ nổi (Pop-up Window)", "Hiển thị cửa sổ nổi trên các ứng dụng khác"),
-        "XIAOMI_BACKGROUND_BLUETOOTH" to Triple("10040", "Bluetooth trong nền", "Duy trì kết nối Bluetooth liên tục khi tắt màn hình")
+        "XIAOMI_BACKGROUND_BLUETOOTH" to Triple("10040", "Bluetooth trong nền", "Duy trì kết nối Bluetooth liên tục khi tắt màn hình"),
+        "XIAOMI_BACKGROUND_START_OTHER" to Triple("10041", "Mở app khác khi chạy nền", "Cho phép ứng dụng khởi động ứng dụng khác khi đang ở chế độ nền"),
+        "XIAOMI_HIGH_PRIORITY_NOTIF" to Triple("10045", "Thông báo ưu tiên không trễ", "Bypass hàng đợi điều tiết thông báo của HyperOS"),
+        "XIAOMI_UNRESTRICTED_DATA" to Triple("10048", "Mạng nền không giới hạn", "Cho phép dùng dữ liệu mạng ngay cả khi hệ thống hạn chế dữ liệu nền"),
+        "XIAOMI_AUTO_DOWNLOAD_MOBILE" to Triple("10049", "Tự động tải mạng di động", "Cho phép tự động tải tập tin trong nền qua 4G/5G")
     )
 
     // System-level permissions có thể cấp qua Shell
@@ -168,5 +172,18 @@ object FastPermissionMapper {
         put("android.permission.RUN_ANY_IN_BACKGROUND", "Chạy ngầm bất kỳ lúc nào")
         put("android.permission.WAKE_LOCK", "Giữ thiết bị thức (Wake Lock)")
         put("android.permission.PROJECT_MEDIA", "Tự động cho phép quay/chụp màn hình")
+        put("BATTERY_OPTIMIZATION_WHITELIST", "Bỏ qua Tối ưu Pin (Bypass Doze)")
+        put("STANDBY_BUCKET_ACTIVE", "Standby Không Hạn Chế (Bucket ACTIVE)")
+        put("XIAOMI_LOCKED_RECENTS", "Khóa Đa nhiệm Recents (Ghim ổ khóa)")
+        put("XIAOMI_MILLET_FREEZE_BYPASS", "Bỏ qua Đóng băng Millet (HyperOS)")
+        put("XIAOMI_AUTOSTART", "Tự khởi chạy HyperOS (10053/10008)")
+        put("XIAOMI_POPUP_BACKGROUND", "Cửa sổ Pop-up khi chạy ngầm (10022)")
+        put("XIAOMI_SHOW_WHEN_LOCKED", "Hiển thị trên màn hình khóa (10021)")
+        put("XIAOMI_POPUP_WINDOW", "Cửa sổ nổi Floating Windows (10027)")
+        put("XIAOMI_BACKGROUND_BLUETOOTH", "Bluetooth trong nền (10040)")
+        put("XIAOMI_BACKGROUND_START_OTHER", "Mở app khác khi chạy nền (10041)")
+        put("XIAOMI_HIGH_PRIORITY_NOTIF", "Thông báo ưu tiên không trễ (10045)")
+        put("XIAOMI_UNRESTRICTED_DATA", "Mạng nền không giới hạn (10048)")
+        put("XIAOMI_AUTO_DOWNLOAD_MOBILE", "Tự động tải mạng di động (10049)")
     }
 }

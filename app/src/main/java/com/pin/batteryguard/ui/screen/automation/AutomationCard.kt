@@ -659,6 +659,64 @@ fun AutomationConfigEditor(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                // 1. Sạc siêu nhanh 90W HyperCharge
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Sạc siêu nhanh (90W HyperCharge)", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
+                        Text(
+                            "Kích hoạt chip sạc Surge P2 trên Xiaomi",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = config.fastCharge90WEnabled,
+                        onCheckedChange = { onUpdateParams(config.copy(fastCharge90WEnabled = it)) }
+                    )
+                }
+
+                // 2. Ưu tiên Sạc Nhanh Tối Đa (Bypass Thermal Throttling)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Ưu tiên Sạc Nhanh Tối Đa", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f)
+                            ) {
+                                Text(
+                                    text = "MAX",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            "Bỏ qua hạ dòng khi ấm • Tự ngắt khẩn cấp nếu pin đạt 48°C",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                        )
+                    }
+                    Switch(
+                        checked = config.prioritizeFastChargeNoThrottle,
+                        onCheckedChange = { onUpdateParams(config.copy(prioritizeFastChargeNoThrottle = it)) }
+                    )
+                }
+
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
+                    thickness = 0.5.dp
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween

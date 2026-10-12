@@ -35,6 +35,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import com.pin.batteryguard.ui.components.CompactAppPickerItem
+import com.pin.batteryguard.ui.components.CompactSearchBar
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -225,61 +228,49 @@ fun DialogAddException(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Thêm vào ngoại lệ", fontSize = 18.sp, fontWeight = FontWeight.Bold) },
+        title = { Text("Thêm vào ngoại lệ", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
         text = {
             Column {
                 if (selectedPkg == null) {
-                    // Màn hình chọn app
-                    OutlinedTextField(
-                        value = uiState.searchQuery,
-                        onValueChange = onSearchChanged,
-                        placeholder = { Text("Tìm ứng dụng...") },
-                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = "Tìm kiếm") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
+                    // Màn hình chọn app tinh gọn
+                    CompactSearchBar(
+                        query = uiState.searchQuery,
+                        onQueryChange = onSearchChanged,
+                        placeholder = "Tìm ứng dụng...",
+                        modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(200.dp),
-                        shape = RoundedCornerShape(8.dp),
+                            .heightIn(min = 180.dp, max = 320.dp),
+                        shape = RoundedCornerShape(10.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)
                     ) {
-                        LazyColumn {
+                        LazyColumn(
+                            modifier = Modifier.padding(4.dp),
+                            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)
+                        ) {
                             items(uiState.filteredAvailableApps) { (pkg, name) ->
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            selectedPkg = pkg
-                                            selectedName = name
-                                        }
-                                        .padding(10.dp)
-                                ) {
-                                    val icon = remember(pkg) { PackageHelper.getAppIcon(context, pkg) }
-                                    if (icon != null) {
-                                        Image(
-                                            bitmap = icon.toBitmap().asImageBitmap(),
-                                            contentDescription = name,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
+                                CompactAppPickerItem(
+                                    appName = name,
+                                    packageName = pkg,
+                                    onClick = {
+                                        selectedPkg = pkg
+                                        selectedName = name
                                     }
-                                    Text(name, fontSize = 14.sp)
-                                }
+                                )
                             }
                         }
                     }
                 } else {
                     // Màn hình nhập lý do
-                    Text("Nhập lý do ngoại lệ cho $selectedName:", fontSize = 14.sp)
+                    Text("Nhập lý do ngoại lệ cho $selectedName:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = reason,
-                        onValueChange = { reason = it },
-                        placeholder = { Text("Lý do (Ví dụ: Game chạy ngầm, Nhạc...)") },
+                    CompactSearchBar(
+                        query = reason,
+                        onQueryChange = { reason = it },
+                        placeholder = "Lý do (Ví dụ: Game chạy ngầm, Nhạc...)",
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -292,9 +283,11 @@ fun DialogAddException(
                         selectedPkg?.let { pkg ->
                             onAppSelected(pkg, selectedName, reason)
                         }
-                    }
+                    },
+                    modifier = Modifier.height(38.dp),
+                    shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text("Xác nhận")
+                    Text("Xác nhận", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
             }
         },
@@ -306,9 +299,10 @@ fun DialogAddException(
                     } else {
                         onDismiss()
                     }
-                }
+                },
+                modifier = Modifier.height(38.dp)
             ) {
-                Text(if (selectedPkg != null) "Quay lại" else "Hủy")
+                Text(if (selectedPkg != null) "Quay lại" else "Hủy", fontSize = 13.sp)
             }
         }
     )

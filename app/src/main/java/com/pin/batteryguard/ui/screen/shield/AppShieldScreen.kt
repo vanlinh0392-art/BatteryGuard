@@ -61,6 +61,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import com.pin.batteryguard.ui.components.CompactFilterChip
+import com.pin.batteryguard.ui.components.CompactSearchBar
+import com.pin.batteryguard.ui.components.StandardActionButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -695,78 +698,50 @@ private fun AppFilterSection(
     onSelectAllBanks: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        // Thanh Search
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onSearchQueryChanged,
-            placeholder = { Text("Tìm ứng dụng...", fontSize = 12.sp) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
-            trailingIcon = {
-                if (searchQuery.isNotBlank()) {
-                    IconButton(onClick = { onSearchQueryChanged("") }) {
-                        Icon(Icons.Default.Clear, contentDescription = "Xóa", modifier = Modifier.size(16.dp))
-                    }
-                }
-            },
-            modifier = Modifier.fillMaxWidth().height(50.dp),
-            shape = RoundedCornerShape(12.dp),
-            singleLine = true
+        // Thanh Search chuẩn 38dp
+        CompactSearchBar(
+            query = searchQuery,
+            onQueryChange = onSearchQueryChanged,
+            placeholder = "Tìm ứng dụng...",
+            modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
-        // Hàng Tabs Lọc cuộn ngang mượt mà cho mọi kích thước màn hình
+        // Hàng Tabs Lọc cuộn ngang mượt mà, phẳng đều chuẩn 30dp
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            FilterChip(
+            CompactFilterChip(
                 selected = selectedTab == AppShieldFilterTab.ALL,
                 onClick = { onSelectTab(AppShieldFilterTab.ALL) },
-                label = { Text("Tất cả ($totalCount)", fontSize = 11.sp, maxLines = 1) },
-                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.primaryContainer)
+                label = "Tất cả ($totalCount)"
             )
 
-            FilterChip(
+            CompactFilterChip(
                 selected = selectedTab == AppShieldFilterTab.SHIELDED,
                 onClick = { onSelectTab(AppShieldFilterTab.SHIELDED) },
-                label = { Text("Đang bảo vệ ($shieldedCount)", fontSize = 11.sp, maxLines = 1) },
-                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.primaryContainer)
+                label = "Đang bảo vệ ($shieldedCount)"
             )
 
-            FilterChip(
+            CompactFilterChip(
                 selected = selectedTab == AppShieldFilterTab.BANKS,
                 onClick = { onSelectTab(AppShieldFilterTab.BANKS) },
-                label = { Text("Ngân hàng ($banksCount)", fontSize = 11.sp, maxLines = 1) },
-                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.primaryContainer)
+                label = "Ngân hàng ($banksCount)"
             )
 
-            // Nút Chọn tất cả ngân hàng dạng Chip nổi bật, không bao giờ bị gãy dòng!
-            Surface(
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { onSelectAllBanks() }
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("⭐", fontSize = 11.sp)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        "Chọn tất cả",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1
-                    )
-                }
-            }
+            CompactFilterChip(
+                selected = false,
+                onClick = onSelectAllBanks,
+                label = "Chọn tất cả",
+                icon = "⭐",
+                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                selectedContentColor = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }

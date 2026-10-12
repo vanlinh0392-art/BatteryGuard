@@ -22,3 +22,6 @@ app/build/
 *.txt
 .codegraph/
 .brain/
+.agents/
+.kotlin/
+GEMINI.md

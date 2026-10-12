@@ -9,14 +9,16 @@ class DrainPolicyTest {
     private val config = MonitoringConfig()
 
     @Test
-    fun evaluate_warns_first_balanced_breach_and_stops_second() {
+    fun evaluate_stops_exceeded_threshold_immediately() {
         val sample = sample(rate = 0.6, delta = 4.0)
 
         val first = policy.evaluate(sample, context(consecutiveBreaches = 0), config)
         val second = policy.evaluate(sample, context(consecutiveBreaches = 1), config)
 
-        assertEquals(DetectionAction.WARN, first.action)
+        assertEquals(DetectionAction.FORCE_STOP, first.action)
+        assertEquals("exceeded_threshold", first.reason)
         assertEquals(DetectionAction.FORCE_STOP, second.action)
+        assertEquals("exceeded_threshold", second.reason)
     }
 
     @Test
@@ -24,7 +26,7 @@ class DrainPolicyTest {
         val decision = policy.evaluate(sample(rate = 1.6, delta = 12.0), context(), config)
 
         assertEquals(DetectionAction.FORCE_STOP, decision.action)
-        assertEquals("critical_rate", decision.reason)
+        assertEquals("exceeded_threshold", decision.reason)
     }
 
     @Test

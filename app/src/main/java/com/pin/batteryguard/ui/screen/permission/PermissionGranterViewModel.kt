@@ -40,7 +40,8 @@ data class TargetAppInfo(
     val isAutomationApp: Boolean,
     val isChatOrBankApp: Boolean = false,
     val isSystem: Boolean,
-    val isSelfApp: Boolean = false
+    val isSelfApp: Boolean = false,
+    val isLockedInRecents: Boolean = false
 )
 
 data class PermissionGranterUiState(
@@ -118,6 +119,28 @@ class PermissionGranterViewModel @Inject constructor(
                 emptyList<ApplicationInfo>()
             }
 
+            val lockedSet = if (com.pin.batteryguard.util.XiaomiHelper.isXiaomi()) {
+                val jsonStr = try {
+                    android.provider.Settings.System.getString(context.contentResolver, "locked_apps") ?: ""
+                } catch (_: Exception) { "" }
+                val set = mutableSetOf<String>()
+                try {
+                    val array = org.json.JSONArray(jsonStr)
+                    for (i in 0 until array.length()) {
+                        val obj = array.optJSONObject(i) ?: continue
+                        if (obj.optInt("u", -999) == 0) {
+                            val pkgs = obj.optJSONArray("pkgs") ?: continue
+                            for (j in 0 until pkgs.length()) {
+                                set.add(pkgs.optString(j))
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+                set
+            } else {
+                emptySet()
+            }
+
             val appList = installed.map { appInfo ->
                 val pkg = appInfo.packageName
                 val appName = PackageHelper.getAppName(context, pkg)
@@ -136,7 +159,8 @@ class PermissionGranterViewModel @Inject constructor(
                     isAutomationApp = isAutomation,
                     isChatOrBankApp = isChatOrBank,
                     isSystem = isSystem,
-                    isSelfApp = isSelf
+                    isSelfApp = isSelf,
+                    isLockedInRecents = pkg in lockedSet
                 )
             }.sortedWith(
                 compareByDescending<TargetAppInfo> { it.isSelfApp }

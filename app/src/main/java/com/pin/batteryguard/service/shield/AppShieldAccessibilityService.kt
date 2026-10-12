@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.os.SystemClock
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
+import com.pin.batteryguard.data.settings.SystemSettingsManager
 import com.pin.batteryguard.domain.shield.AppShieldManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -43,6 +44,19 @@ class AppShieldAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val packageName = event?.packageName?.toString() ?: return
+
+        // Intercept XiaoAI Screen Recognition khi cử chỉ Home Long Press Search được bật (Micro-optimized hot path)
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val className = event.className?.toString() ?: ""
+            val isScreenRecognition = className.contains("ScreenRecognitionActivity") ||
+                (packageName == "com.miui.voiceassist" && (className.contains("ScreenRecognition") || className.contains("Recognition")))
+            if (isScreenRecognition && SystemSettingsManager.isHomeLongPressSearchEnabled(this)) {
+                Log.i(TAG, "🔍 Bắt được XiaoAI Screen Recognition ($packageName / $className), kích hoạt MiCTS và đóng XiaoAI")
+                SystemSettingsManager.launchMiCTS(this)
+                performGlobalAction(GLOBAL_ACTION_BACK)
+                return
+            }
+        }
 
         // Bỏ qua chính BatteryGuard và package rỗng
         if (packageName == this.packageName || packageName.isBlank()) return

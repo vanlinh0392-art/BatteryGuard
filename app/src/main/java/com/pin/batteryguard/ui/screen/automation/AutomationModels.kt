@@ -89,7 +89,10 @@ data class OvernightChargingParams(
     val alertSoundOnTarget: Boolean = true,
     val startHour: Int = 22,
     val endHour: Int = 7,
-    val preventOverheat: Boolean = true
+    val preventOverheat: Boolean = true,
+    val fastCharge90WEnabled: Boolean = true,
+    val prioritizeFastChargeNoThrottle: Boolean = false,
+    val criticalThermalLimit: Float = 48.0f
 ) : AutomationConfigParams
 
 /**

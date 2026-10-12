@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.content.pm.PermissionInfo
 import android.os.Build
 import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import com.pin.batteryguard.adb.AdbClient
 import com.pin.batteryguard.data.db.dao.PermissionSnapshotDao
@@ -77,9 +78,20 @@ class UniversalPermissionManager @Inject constructor(
         val isSystemApp = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
 
         val isXiaomi = XiaomiHelper.isXiaomi()
-        val rawAppOpsDump = if (isXiaomi && (shizukuManager.isReady() || shizukuManager.ensureReady())) {
+        val isShizukuAvailable = shizukuManager.isReady() || shizukuManager.ensureReady()
+        val rawAppOpsDump = if (isXiaomi && isShizukuAvailable) {
             try {
                 executeShizukuCommandWithTimeout(arrayOf("cmd", "appops", "get", packageName), 2000L).stdout
+            } catch (_: Exception) {
+                ""
+            }
+        } else {
+            ""
+        }
+
+        val rawStandbyBucket = if (isShizukuAvailable) {
+            try {
+                executeShizukuCommandWithTimeout(arrayOf("am", "get-standby-bucket", packageName), 2000L).stdout.trim()
             } catch (_: Exception) {
                 ""
             }
@@ -184,7 +196,6 @@ class UniversalPermissionManager @Inject constructor(
         }
 
         // 2. Bổ sung mục Nền & Nguồn điện (Bypass Doze Whitelist & Standby Bucket)
-        // Đây là tính năng cấp hệ thống quản lý pin độc lập cho app
         val isDozeWhitelisted = isIgnoringBatteryOptimizations(packageName)
         resultList.add(
             DynamicPermissionItem(
@@ -198,15 +209,29 @@ class UniversalPermissionManager @Inject constructor(
             )
         )
 
-        // 3. Nếu là điện thoại Xiaomi / HyperOS (không áp dụng cho Android TV): Bổ sung các mã AppOps Xiaomi
+        val bucketVal = rawStandbyBucket.toIntOrNull()
+        val isStandbyActive = (bucketVal == 5 || bucketVal == 10)
+        resultList.add(
+            DynamicPermissionItem(
+                name = "STANDBY_BUCKET_ACTIVE",
+                label = "Standby Không Hạn Chế (Bucket ACTIVE)",
+                description = "Chế độ Standby Nhóm 10 (Active), ngăn hệ thống trì hoãn Job hoặc ngắt mạng nền",
+                category = PermissionCategory.BACKGROUND_BATTERY,
+                status = if (isStandbyActive) PermissionStatus.GRANTED else PermissionStatus.DENIED,
+                isGrantable = true,
+                isDeclared = true
+            )
+        )
+
+        // 3. Nếu là điện thoại Xiaomi / HyperOS (không áp dụng cho Android TV): Bổ sung các mã AppOps Xiaomi & Tối ưu HyperOS
         if (isXiaomi) {
             val hasAutoStart = checkAppOpAllowed(packageName, uid, "10053", rawAppOpsDump = rawAppOpsDump) ||
                     checkAppOpAllowed(packageName, uid, "10008", rawAppOpsDump = rawAppOpsDump)
             resultList.add(
                 DynamicPermissionItem(
                     name = "XIAOMI_AUTOSTART",
-                    label = "Tự khởi chạy Xiaomi / HyperOS",
-                    description = "Bật công tắc Tự khởi chạy (Autostart 10053/10008) trong Bảo mật Xiaomi",
+                    label = "Tự khởi chạy HyperOS (10053/10008)",
+                    description = "Bật công tắc Tự khởi chạy trong Trung tâm Bảo mật HyperOS / MIUI",
                     category = PermissionCategory.OEM_XIAOMI,
                     status = if (hasAutoStart) PermissionStatus.GRANTED else PermissionStatus.DENIED,
                     isGrantable = true,
@@ -219,12 +244,136 @@ class UniversalPermissionManager @Inject constructor(
             resultList.add(
                 DynamicPermissionItem(
                     name = "XIAOMI_POPUP_BACKGROUND",
-                    label = "Cửa sổ Pop-up khi chạy ngầm (Xiaomi)",
-                    description = "Cho phép hiển thị giao diện pop-up khi đang chạy nền (Op 10022)",
+                    label = "Cửa sổ Pop-up khi chạy ngầm (10022)",
+                    description = "Cho phép hiển thị giao diện pop-up/mở màn hình khi đang chạy nền",
                     category = PermissionCategory.OEM_XIAOMI,
                     status = if (hasBgPopup) PermissionStatus.GRANTED else PermissionStatus.DENIED,
                     isGrantable = true,
                     opCode = "10022",
+                    isOemSpecific = true
+                )
+            )
+
+            val hasLockscreen = checkAppOpAllowed(packageName, uid, "10021", rawAppOpsDump = rawAppOpsDump)
+            resultList.add(
+                DynamicPermissionItem(
+                    name = "XIAOMI_SHOW_WHEN_LOCKED",
+                    label = "Hiển thị trên màn hình khóa (10021)",
+                    description = "Cho phép hiển thị thông báo/giao diện cuộc gọi khi màn hình đang khóa",
+                    category = PermissionCategory.OEM_XIAOMI,
+                    status = if (hasLockscreen) PermissionStatus.GRANTED else PermissionStatus.DENIED,
+                    isGrantable = true,
+                    opCode = "10021",
+                    isOemSpecific = true
+                )
+            )
+
+            val hasFloatingWindow = checkAppOpAllowed(packageName, uid, "10027", rawAppOpsDump = rawAppOpsDump)
+            resultList.add(
+                DynamicPermissionItem(
+                    name = "XIAOMI_POPUP_WINDOW",
+                    label = "Cửa sổ nổi Floating Windows (10027)",
+                    description = "Hiển thị bong bóng nổi, widget cửa sổ nổi trên các ứng dụng khác",
+                    category = PermissionCategory.OEM_XIAOMI,
+                    status = if (hasFloatingWindow) PermissionStatus.GRANTED else PermissionStatus.DENIED,
+                    isGrantable = true,
+                    opCode = "10027",
+                    isOemSpecific = true
+                )
+            )
+
+            val hasBgBt = checkAppOpAllowed(packageName, uid, "10040", rawAppOpsDump = rawAppOpsDump)
+            resultList.add(
+                DynamicPermissionItem(
+                    name = "XIAOMI_BACKGROUND_BLUETOOTH",
+                    label = "Bluetooth trong nền (10040)",
+                    description = "Duy trì kết nối Bluetooth liên tục cho đồng hồ/thiết bị khi tắt màn hình",
+                    category = PermissionCategory.OEM_XIAOMI,
+                    status = if (hasBgBt) PermissionStatus.GRANTED else PermissionStatus.DENIED,
+                    isGrantable = true,
+                    opCode = "10040",
+                    isOemSpecific = true
+                )
+            )
+
+            val hasBgStartOther = checkAppOpAllowed(packageName, uid, "10041", rawAppOpsDump = rawAppOpsDump)
+            resultList.add(
+                DynamicPermissionItem(
+                    name = "XIAOMI_BACKGROUND_START_OTHER",
+                    label = "Mở app khác khi chạy nền (10041)",
+                    description = "Cho phép ứng dụng khởi động ứng dụng khác khi đang ở chế độ nền",
+                    category = PermissionCategory.OEM_XIAOMI,
+                    status = if (hasBgStartOther) PermissionStatus.GRANTED else PermissionStatus.DENIED,
+                    isGrantable = true,
+                    opCode = "10041",
+                    isOemSpecific = true
+                )
+            )
+
+            val hasPriorityNotif = checkAppOpAllowed(packageName, uid, "10045", rawAppOpsDump = rawAppOpsDump)
+            resultList.add(
+                DynamicPermissionItem(
+                    name = "XIAOMI_HIGH_PRIORITY_NOTIF",
+                    label = "Thông báo ưu tiên không trễ (10045)",
+                    description = "Bypass hàng đợi điều tiết thông báo đẩy của HyperOS",
+                    category = PermissionCategory.OEM_XIAOMI,
+                    status = if (hasPriorityNotif) PermissionStatus.GRANTED else PermissionStatus.DENIED,
+                    isGrantable = true,
+                    opCode = "10045",
+                    isOemSpecific = true
+                )
+            )
+
+            val hasUnrestrictedData = checkAppOpAllowed(packageName, uid, "10048", rawAppOpsDump = rawAppOpsDump)
+            resultList.add(
+                DynamicPermissionItem(
+                    name = "XIAOMI_UNRESTRICTED_DATA",
+                    label = "Mạng nền không giới hạn (10048)",
+                    description = "Cho phép sử dụng dữ liệu di động trong nền không bị bóp băng thông",
+                    category = PermissionCategory.OEM_XIAOMI,
+                    status = if (hasUnrestrictedData) PermissionStatus.GRANTED else PermissionStatus.DENIED,
+                    isGrantable = true,
+                    opCode = "10048",
+                    isOemSpecific = true
+                )
+            )
+
+            val hasAutoDownload = checkAppOpAllowed(packageName, uid, "10049", rawAppOpsDump = rawAppOpsDump)
+            resultList.add(
+                DynamicPermissionItem(
+                    name = "XIAOMI_AUTO_DOWNLOAD_MOBILE",
+                    label = "Tự động tải mạng di động (10049)",
+                    description = "Cho phép tự động tải tập tin trong nền qua dữ liệu di động 4G/5G",
+                    category = PermissionCategory.OEM_XIAOMI,
+                    status = if (hasAutoDownload) PermissionStatus.GRANTED else PermissionStatus.DENIED,
+                    isGrantable = true,
+                    opCode = "10049",
+                    isOemSpecific = true
+                )
+            )
+
+            val isLocked = XiaomiHelper.isAppLockedInRecents(context, packageName)
+            resultList.add(
+                DynamicPermissionItem(
+                    name = "XIAOMI_LOCKED_RECENTS",
+                    label = "Khóa Đa nhiệm Recents (Ghim ổ khóa)",
+                    description = "Ghim ứng dụng trong Đa nhiệm HyperOS, chống bị xóa khi bấm nút dọn RAM",
+                    category = PermissionCategory.OEM_XIAOMI,
+                    status = if (isLocked) PermissionStatus.GRANTED else PermissionStatus.DENIED,
+                    isGrantable = true,
+                    isOemSpecific = true
+                )
+            )
+
+            val isMillet = XiaomiHelper.isMilletWhitelisted(context, packageName)
+            resultList.add(
+                DynamicPermissionItem(
+                    name = "XIAOMI_MILLET_FREEZE_BYPASS",
+                    label = "Miễn trừ Đóng băng Kernel Millet",
+                    description = "Ngăn chặn module kernel Millet của Xiaomi đóng băng tiến trình khi tắt màn hình",
+                    category = PermissionCategory.OEM_XIAOMI,
+                    status = if (isMillet) PermissionStatus.GRANTED else PermissionStatus.DENIED,
+                    isGrantable = true,
                     isOemSpecific = true
                 )
             )
@@ -272,15 +421,40 @@ class UniversalPermissionManager @Inject constructor(
             return@withContext executeCommandWithFallback(cmd)
         }
 
+        if (item.name == "STANDBY_BUCKET_ACTIVE") {
+            val bucket = if (enable) "active" else "working_set"
+            val cmd = "am set-standby-bucket $packageName $bucket"
+            return@withContext executeCommandWithFallback(cmd)
+        }
+
+        if (item.name == "XIAOMI_LOCKED_RECENTS") {
+            val direct = XiaomiHelper.setAppLockedInRecents(context, packageName, enable)
+            if (direct) return@withContext Pair(true, if (enable) "Đã khóa đa nhiệm Recents" else "Đã bỏ khóa đa nhiệm")
+            val currentJson = try { Settings.System.getString(context.contentResolver, "locked_apps") ?: "[]" } catch (_: Exception) { "[]" }
+            val newJson = XiaomiHelper.modifyLockedAppsJson(currentJson, packageName, enable)
+            val cmd = "settings put system locked_apps '$newJson'"
+            return@withContext executeCommandWithFallback(cmd)
+        }
+
+        if (item.name == "XIAOMI_MILLET_FREEZE_BYPASS") {
+            val direct = XiaomiHelper.setMilletWhitelist(context, packageName, enable)
+            if (direct) return@withContext Pair(true, if (enable) "Đã thêm vào Millet Whitelist" else "Đã xóa khỏi Millet Whitelist")
+            val currentList = try { Settings.System.getString(context.contentResolver, "MILLET_NO_RESTRICT_APP") ?: "" } catch (_: Exception) { "" }
+            val newList = XiaomiHelper.modifyMilletWhitelist(currentList, packageName, enable)
+            val cmd = "settings put system MILLET_NO_RESTRICT_APP '$newList'"
+            return@withContext executeCommandWithFallback(cmd)
+        }
+
         if (item.name == "XIAOMI_AUTOSTART") {
-            val mode = if (enable) "allow" else "default"
-            val cmd = "cmd appops set $packageName 10053 $mode; cmd appops set $packageName 10008 $mode; am force-stop com.miui.securitycenter"
+            // Trên HyperOS/MIUI, mode "ignore" triệt để ngăn chặn SecurityCenter và hệ thống gọi receiver
+            val mode = if (enable) "allow" else "ignore"
+            val cmd = "cmd appops set --user 0 $packageName 10053 $mode; cmd appops set --user 0 $packageName 10008 $mode; am force-stop com.miui.securitycenter"
             return@withContext executeCommandWithFallback(cmd)
         }
 
         if (item.category == PermissionCategory.OEM_XIAOMI && item.opCode != null) {
-            val mode = if (enable) "allow" else "default"
-            val cmd = "cmd appops set $packageName ${item.opCode} $mode; am force-stop com.miui.securitycenter"
+            val mode = if (enable) "allow" else "ignore"
+            val cmd = "cmd appops set --user 0 $packageName ${item.opCode} $mode; am force-stop com.miui.securitycenter"
             return@withContext executeCommandWithFallback(cmd)
         }
 
@@ -338,6 +512,13 @@ class UniversalPermissionManager @Inject constructor(
                 if (XiaomiHelper.isXiaomi()) {
                     commandsToRun.add("cmd appops set --user 0 $packageName 10053 allow")
                     commandsToRun.add("cmd appops set --user 0 $packageName 10008 allow")
+                    commandsToRun.add("cmd appops set --user 0 $packageName 10022 allow")
+                    val currentJson = try { Settings.System.getString(context.contentResolver, "locked_apps") ?: "[]" } catch (_: Exception) { "[]" }
+                    val newJson = XiaomiHelper.modifyLockedAppsJson(currentJson, packageName, true)
+                    commandsToRun.add("settings put system locked_apps '$newJson'")
+                    val currentMillet = try { Settings.System.getString(context.contentResolver, "MILLET_NO_RESTRICT_APP") ?: "" } catch (_: Exception) { "" }
+                    val newMillet = XiaomiHelper.modifyMilletWhitelist(currentMillet, packageName, true)
+                    commandsToRun.add("settings put system MILLET_NO_RESTRICT_APP '$newMillet'")
                 }
             }
             PermissionPreset.TOOLS_OVERLAY -> {
@@ -360,8 +541,18 @@ class UniversalPermissionManager @Inject constructor(
                     commandsToRun.add("cmd appops set --user 0 $packageName 10008 allow")
                     commandsToRun.add("cmd appops set --user 0 $packageName 10021 allow")
                     commandsToRun.add("cmd appops set --user 0 $packageName 10022 allow")
+                    commandsToRun.add("cmd appops set --user 0 $packageName 10027 allow")
+                    commandsToRun.add("cmd appops set --user 0 $packageName 10040 allow")
+                    commandsToRun.add("cmd appops set --user 0 $packageName 10045 allow")
+                    commandsToRun.add("cmd appops set --user 0 $packageName 10048 allow")
                     commandsToRun.add("dumpsys deviceidle whitelist +$packageName")
                     commandsToRun.add("am set-standby-bucket $packageName active")
+                    val currentJson = try { Settings.System.getString(context.contentResolver, "locked_apps") ?: "[]" } catch (_: Exception) { "[]" }
+                    val newJson = XiaomiHelper.modifyLockedAppsJson(currentJson, packageName, true)
+                    commandsToRun.add("settings put system locked_apps '$newJson'")
+                    val currentMillet = try { Settings.System.getString(context.contentResolver, "MILLET_NO_RESTRICT_APP") ?: "" } catch (_: Exception) { "" }
+                    val newMillet = XiaomiHelper.modifyMilletWhitelist(currentMillet, packageName, true)
+                    commandsToRun.add("settings put system MILLET_NO_RESTRICT_APP '$newMillet'")
                     commandsToRun.add("am force-stop com.miui.securitycenter")
                 }
             }
@@ -374,9 +565,21 @@ class UniversalPermissionManager @Inject constructor(
                         if (it.category == PermissionCategory.RUNTIME) {
                             commandsToRun.add("pm revoke $packageName ${it.name}")
                         } else if (it.opCode != null) {
-                            commandsToRun.add("cmd appops set --user 0 $packageName ${it.opCode} default")
+                            val mode = if (it.isOemSpecific || it.category == PermissionCategory.OEM_XIAOMI) "ignore" else "default"
+                            commandsToRun.add("cmd appops set --user 0 $packageName ${it.opCode} $mode")
                         }
                     }
+                commandsToRun.add("dumpsys deviceidle whitelist -$packageName")
+                commandsToRun.add("am set-standby-bucket $packageName working_set")
+                if (XiaomiHelper.isXiaomi()) {
+                    val currentJson = try { Settings.System.getString(context.contentResolver, "locked_apps") ?: "[]" } catch (_: Exception) { "[]" }
+                    val newJson = XiaomiHelper.modifyLockedAppsJson(currentJson, packageName, false)
+                    commandsToRun.add("settings put system locked_apps '$newJson'")
+                    val currentMillet = try { Settings.System.getString(context.contentResolver, "MILLET_NO_RESTRICT_APP") ?: "" } catch (_: Exception) { "" }
+                    val newMillet = XiaomiHelper.modifyMilletWhitelist(currentMillet, packageName, false)
+                    commandsToRun.add("settings put system MILLET_NO_RESTRICT_APP '$newMillet'")
+                    commandsToRun.add("am force-stop com.miui.securitycenter")
+                }
             }
         }
 
@@ -417,6 +620,17 @@ class UniversalPermissionManager @Inject constructor(
         for (item in toGrant) {
             when {
                 item.name == "BATTERY_OPTIMIZATION_WHITELIST" -> commands.add("dumpsys deviceidle whitelist +$packageName")
+                item.name == "STANDBY_BUCKET_ACTIVE" -> commands.add("am set-standby-bucket $packageName active")
+                item.name == "XIAOMI_LOCKED_RECENTS" -> {
+                    val currentJson = try { Settings.System.getString(context.contentResolver, "locked_apps") ?: "[]" } catch (_: Exception) { "[]" }
+                    val newJson = XiaomiHelper.modifyLockedAppsJson(currentJson, packageName, true)
+                    commands.add("settings put system locked_apps '$newJson'")
+                }
+                item.name == "XIAOMI_MILLET_FREEZE_BYPASS" -> {
+                    val currentMillet = try { Settings.System.getString(context.contentResolver, "MILLET_NO_RESTRICT_APP") ?: "" } catch (_: Exception) { "" }
+                    val newMillet = XiaomiHelper.modifyMilletWhitelist(currentMillet, packageName, true)
+                    commands.add("settings put system MILLET_NO_RESTRICT_APP '$newMillet'")
+                }
                 item.name == "XIAOMI_AUTOSTART" -> {
                     commands.add("cmd appops set --user 0 $packageName 10053 allow")
                     commands.add("cmd appops set --user 0 $packageName 10008 allow")
@@ -426,6 +640,9 @@ class UniversalPermissionManager @Inject constructor(
                     commands.add("pm grant $packageName ${item.name}")
                 }
             }
+        }
+        if (XiaomiHelper.isXiaomi()) {
+            commands.add("am force-stop com.miui.securitycenter")
         }
 
         val res = executeCompoundPipeline(commands)
@@ -475,6 +692,54 @@ class UniversalPermissionManager @Inject constructor(
     }
 
     /**
+     * Tạo lệnh shell an toàn cho từng mục quyền khi thực hiện Rollback Snapshot
+     */
+    private fun buildCommandsForRollbackItem(
+        packageName: String,
+        item: DynamicPermissionItem,
+        grant: Boolean
+    ): List<String> {
+        val commands = mutableListOf<String>()
+        when (item.name) {
+            "BATTERY_OPTIMIZATION_WHITELIST" -> {
+                commands.add(if (grant) "dumpsys deviceidle whitelist +$packageName" else "dumpsys deviceidle whitelist -$packageName")
+            }
+            "STANDBY_BUCKET_ACTIVE" -> {
+                commands.add(if (grant) "am set-standby-bucket $packageName active" else "am set-standby-bucket $packageName working_set")
+            }
+            "XIAOMI_LOCKED_RECENTS" -> {
+                val currentJson = try { Settings.System.getString(context.contentResolver, "locked_apps") ?: "[]" } catch (_: Exception) { "[]" }
+                val newJson = XiaomiHelper.modifyLockedAppsJson(currentJson, packageName, grant)
+                commands.add("settings put system locked_apps '$newJson'")
+            }
+            "XIAOMI_MILLET_FREEZE_BYPASS" -> {
+                val currentMillet = try { Settings.System.getString(context.contentResolver, "MILLET_NO_RESTRICT_APP") ?: "" } catch (_: Exception) { "" }
+                val newMillet = XiaomiHelper.modifyMilletWhitelist(currentMillet, packageName, grant)
+                commands.add("settings put system MILLET_NO_RESTRICT_APP '$newMillet'")
+            }
+            "XIAOMI_AUTOSTART" -> {
+                val mode = if (grant) "allow" else "ignore"
+                commands.add("cmd appops set --user 0 $packageName 10053 $mode")
+                commands.add("cmd appops set --user 0 $packageName 10008 $mode")
+            }
+            else -> {
+                val op = item.opCode ?: FastPermissionMapper.APPOPS_MAP[item.name]
+                if (op != null) {
+                    val mode = if (grant) "allow" else "default"
+                    commands.add("cmd appops set --user 0 $packageName $op $mode")
+                } else if (item.category == PermissionCategory.RUNTIME || item.category == PermissionCategory.SYSTEM) {
+                    if (grant) {
+                        commands.add("pm grant $packageName ${item.name}")
+                    } else if (!SecurityValidator.isCriticalSystemApp(packageName)) {
+                        commands.add("pm revoke $packageName ${item.name}")
+                    }
+                }
+            }
+        }
+        return commands
+    }
+
+    /**
      * Khôi phục (Rollback) quyền của ứng dụng về bản Snapshot gần nhất (Delta-Diffing Idempotent).
      */
     suspend fun rollbackLatestSnapshot(packageName: String): Pair<Boolean, String> = withContext(Dispatchers.IO) {
@@ -502,8 +767,7 @@ class UniversalPermissionManager @Inject constructor(
         for (p in toGrant) {
             val item = currentPerms.find { it.name == p }
             if (item != null && item.isGrantable) {
-                if (item.opCode != null) commands.add("cmd appops set --user 0 $packageName ${item.opCode} allow")
-                else commands.add("pm grant $packageName ${item.name}")
+                commands.addAll(buildCommandsForRollbackItem(packageName, item, grant = true))
             }
         }
 
@@ -511,8 +775,7 @@ class UniversalPermissionManager @Inject constructor(
         for (p in toRevoke) {
             val item = currentPerms.find { it.name == p }
             if (item != null && item.isGrantable && !SecurityValidator.isCriticalSystemApp(packageName)) {
-                if (item.opCode != null) commands.add("cmd appops set --user 0 $packageName ${item.opCode} default")
-                else commands.add("pm revoke $packageName ${item.name}")
+                commands.addAll(buildCommandsForRollbackItem(packageName, item, grant = false))
             }
         }
 
@@ -523,8 +786,13 @@ class UniversalPermissionManager @Inject constructor(
             commands.add("dumpsys deviceidle whitelist -$packageName")
         }
 
-        if (commands.isNotEmpty()) {
-            executeCompoundPipeline(commands)
+        if (XiaomiHelper.isXiaomi()) {
+            commands.add("am force-stop com.miui.securitycenter")
+        }
+
+        val distinctCommands = commands.distinct()
+        if (distinctCommands.isNotEmpty()) {
+            executeCompoundPipeline(distinctCommands)
         }
 
         // Xóa bản snapshot này sau khi đã hoàn tác xong
@@ -596,7 +864,10 @@ class UniversalPermissionManager @Inject constructor(
             if (rawAppOpsDump.isNotBlank()) {
                 val isAllowInDump = rawAppOpsDump.contains("$opCodeOrName: allow") ||
                         rawAppOpsDump.contains("($opCodeOrName): allow") ||
-                        rawAppOpsDump.contains("MIUIOP($opCodeOrName): allow")
+                        rawAppOpsDump.contains("MIUIOP($opCodeOrName): allow") ||
+                        rawAppOpsDump.contains("$opCodeOrName: foreground") ||
+                        rawAppOpsDump.contains("($opCodeOrName): foreground") ||
+                        rawAppOpsDump.contains("MIUIOP($opCodeOrName): foreground")
                 if (isAllowInDump) return true
             }
         }

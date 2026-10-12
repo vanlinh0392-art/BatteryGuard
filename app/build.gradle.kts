@@ -14,8 +14,8 @@ android {
         applicationId = "com.pin.batteryguard"
         minSdk = 35
         targetSdk = 36
-        versionCode = 29
-        versionName = "1.0.28"
+        versionCode = 34
+        versionName = "1.0.33"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

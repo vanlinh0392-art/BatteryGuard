@@ -62,6 +62,7 @@ class AutomationCoordinator @Inject constructor(
 
     // Cache cấu hình đang áp dụng
     @Volatile private var currentConfig = AutomationMasterConfig()
+    @Volatile private var isStarted = false
 
     // Trạng thái phần cứng tức thời
     private val _isWifiConnected = MutableStateFlow(false)
@@ -90,6 +91,15 @@ class AutomationCoordinator @Inject constructor(
     // C2: Guard flag chống coroutine flooding khi pin yếu
     @Volatile private var isPowerSaverApplied = false
 
+    // Smart Thermal: Cờ hạ công suất sạc 90W khi quá nhiệt
+    @Volatile private var isFastChargeThrottled = false
+    private var wasFastChargeOriginallyEnabled: Boolean? = null
+    @Volatile private var isCriticalThermalThrottled = false
+    @Volatile private var hasAppliedThermalOverride = false
+
+    // Cache trạng thái dark mode gốc trước khi vào low battery saver
+    private var cachedWasDarkModeForBatterySaver: Boolean? = null
+
     // H8: Cooldown toggle 4G chống Wi-Fi chập chờn
     @Volatile private var lastMobileDataToggleTime = 0L
 
@@ -101,6 +111,11 @@ class AutomationCoordinator @Inject constructor(
     }
 
     fun start(serviceScope: CoroutineScope) {
+        if (isStarted) {
+            Log.d(TAG, "AutomationCoordinator đã chạy, bỏ qua gọi start() trùng lặp")
+            return
+        }
+        isStarted = true
         this.scope = serviceScope
         Log.i(TAG, "🚀 Khởi động AutomationCoordinator trên BatteryMonitorService")
 
@@ -120,6 +135,11 @@ class AutomationCoordinator @Inject constructor(
 
     fun stop() {
         Log.i(TAG, "🛑 Dừng AutomationCoordinator")
+        isStarted = false
+        scope?.launch(Dispatchers.IO) {
+            SystemActionBridge.resetThermalStatus(context)
+        }
+        hasAppliedThermalOverride = false
         unregisterNetworkCallback()
         unregisterRingerAlarmReceiver()
         cancelRingerAlarm() // H7: Cancel zombie alarms
@@ -464,17 +484,104 @@ class AutomationCoordinator @Inject constructor(
         val chargingStateChanged = (charging != isCurrentlyCharging)
         isCurrentlyCharging = charging
 
+        if (!charging) {
+            hasNotifiedOvernightCharging = false
+            if (hasAppliedThermalOverride) {
+                hasAppliedThermalOverride = false
+                scope?.launch(Dispatchers.IO) {
+                    SystemActionBridge.resetThermalStatus(context)
+                }
+            }
+            if (isCriticalThermalThrottled) {
+                isCriticalThermalThrottled = false
+                scope?.launch(Dispatchers.IO) {
+                    SystemActionBridge.setFastChargingEnabled(context, true)
+                }
+            }
+            if (isFastChargeThrottled) {
+                isFastChargeThrottled = false
+                val shouldRestore = wasFastChargeOriginallyEnabled ?: true
+                wasFastChargeOriginallyEnabled = null
+                if (shouldRestore) {
+                    scope?.launch(Dispatchers.IO) {
+                        SystemActionBridge.setFastChargingEnabled(context, true)
+                    }
+                }
+            }
+        }
+
         if (!currentConfig.isMasterEnabled) return
 
         if (chargingStateChanged && currentConfig.dayNightRingerEnabled) {
             evaluateRingerSchedule()
         }
 
-        if (!charging) {
-            hasNotifiedOvernightCharging = false
+        if (charging) {
+            val overnightParams = currentConfig.overnightChargingParams
+
+            // Module Quản lý Sạc & Thermal Guard
+            if (overnightParams.prioritizeFastChargeNoThrottle) {
+                // Chế độ: Ưu tiên Sạc Nhanh Tối Đa (Bỏ qua bảo vệ nhiệt độ 38-45°C)
+                if (chargingStateChanged || !hasAppliedThermalOverride) {
+                    hasAppliedThermalOverride = true
+                    scope?.launch(Dispatchers.IO) {
+                        SystemActionBridge.overrideThermalStatus(context, 0)
+                        if (overnightParams.fastCharge90WEnabled) {
+                            SystemActionBridge.setFastChargingEnabled(context, true)
+                        }
+                    }
+                }
+
+                // Hard Fail-Safe: Cắt sạc nhanh nếu nhiệt độ chạm trần nguy hiểm >= 48°C
+                val criticalLimit = overnightParams.criticalThermalLimit
+                if (temperature >= criticalLimit && !isCriticalThermalThrottled) {
+                    isCriticalThermalThrottled = true
+                    scope?.launch(Dispatchers.IO) {
+                        SystemActionBridge.resetThermalStatus(context)
+                        SystemActionBridge.setFastChargingEnabled(context, false)
+                        Log.w(TAG, "🚨 [EmergencyThermalGuard] Pin chạm ${temperature}°C (>= ${criticalLimit}°C) -> Kích hoạt Hard Fail-Safe ngắt sạc nhanh bảo vệ cell pin!")
+                    }
+                } else if (temperature <= 42.0f && isCriticalThermalThrottled) {
+                    isCriticalThermalThrottled = false
+                    scope?.launch(Dispatchers.IO) {
+                        SystemActionBridge.overrideThermalStatus(context, 0)
+                        if (overnightParams.fastCharge90WEnabled) {
+                            SystemActionBridge.setFastChargingEnabled(context, true)
+                        }
+                        Log.i(TAG, "❄️ [EmergencyThermalGuard] Pin đã hạ an toàn về ${temperature}°C (<= 42°C) -> Khôi phục ưu tiên sạc nhanh tối đa")
+                    }
+                }
+            } else {
+                // Chế độ bảo vệ nhiệt độ tiêu chuẩn
+                if (hasAppliedThermalOverride) {
+                    hasAppliedThermalOverride = false
+                    scope?.launch(Dispatchers.IO) {
+                        SystemActionBridge.resetThermalStatus(context)
+                    }
+                }
+
+                if (temperature >= 38.5f && !isFastChargeThrottled) {
+                    isFastChargeThrottled = true
+                    wasFastChargeOriginallyEnabled = SystemActionBridge.isFastChargingEnabled(context)
+                    scope?.launch(Dispatchers.IO) {
+                        SystemActionBridge.setFastChargingEnabled(context, false)
+                        Log.w(TAG, "🔥 [SmartThermalGuard] Pin đạt ${temperature}°C (>38.5°C) -> Tạm hạ công suất sạc 90W bảo vệ Surge P2/G1")
+                    }
+                } else if (temperature <= 36.5f && isFastChargeThrottled) {
+                    isFastChargeThrottled = false
+                    val shouldRestore = wasFastChargeOriginallyEnabled ?: true
+                    wasFastChargeOriginallyEnabled = null
+                    if (shouldRestore) {
+                        scope?.launch(Dispatchers.IO) {
+                            SystemActionBridge.setFastChargingEnabled(context, true)
+                            Log.i(TAG, "❄️ [SmartThermalGuard] Pin đã hạ về ${temperature}°C (<36.5°C) -> Khôi phục sạc nhanh HyperCharge 90W")
+                        }
+                    }
+                }
+            }
         }
 
-        // Module 3: Sạc qua đêm bảo vệ pin
+        // Module 3: Quản lý sạc pin & Bảo vệ qua đêm
         if (currentConfig.overnightChargingEnabled && charging) {
             val overnightParams = currentConfig.overnightChargingParams
             val limit = overnightParams.maxChargeLimitPercent
@@ -502,10 +609,16 @@ class AutomationCoordinator @Inject constructor(
                     SystemActionBridge.applySmartChargingLimit(context, limit)
                 }
             } else {
+                val statusText = when {
+                    overnightParams.prioritizeFastChargeNoThrottle && isCriticalThermalThrottled -> "🚨 Khẩn cấp: Quá nhiệt ${temperature}°C • Đang hạ sạc"
+                    overnightParams.prioritizeFastChargeNoThrottle -> "🔥 Đang ưu tiên sạc nhanh tối đa (${temperature}°C)"
+                    overnightParams.fastCharge90WEnabled -> "⚡ Đang sạc nhanh HyperCharge (${level}%)"
+                    else -> "🔋 Đang sạc (${level}% / ${limit}%)"
+                }
                 updateRuleState(
                     AutomationRuleId.OVERNIGHT_CHARGING,
                     RuleActiveStatus.IDLE,
-                    "Đang sạc (${level}% / ${limit}%)",
+                    statusText,
                     "Khung giờ đêm: ${String.format("%02d:00", startH)} - ${String.format("%02d:00", endH)}"
                 )
             }
@@ -525,7 +638,11 @@ class AutomationCoordinator @Inject constructor(
                 isPowerSaverApplied = true
                 scope?.launch(Dispatchers.IO) {
                     if (saverParams.enableSystemPowerSaver) {
+                        if (cachedWasDarkModeForBatterySaver == null) {
+                            cachedWasDarkModeForBatterySaver = SystemActionBridge.isSystemDarkMode(context)
+                        }
                         SystemActionBridge.setPowerSaveMode(context, enable = true)
+                        SystemActionBridge.setSystemDarkMode(context, enable = true)
                     }
                     if (saverParams.dimDisplayBrightness) {
                         val current = SystemActionBridge.getScreenBrightness(context)
@@ -551,9 +668,18 @@ class AutomationCoordinator @Inject constructor(
                 isPowerSaverApplied = false
                 scope?.launch(Dispatchers.IO) {
                     SystemActionBridge.setPowerSaveMode(context, enable = false)
+                    val wasDark = cachedWasDarkModeForBatterySaver ?: false
+                    if (!wasDark) {
+                        SystemActionBridge.setSystemDarkMode(context, enable = false)
+                    }
+                    cachedWasDarkModeForBatterySaver = null
+
                     cachedBrightnessForBatterySaver?.let { restoreBright ->
                         SystemActionBridge.setScreenBrightness(context, restoreBright)
                         cachedBrightnessForBatterySaver = null
+                    }
+                    if (saverParams.capRefreshRate60Hz) {
+                        SystemActionBridge.restoreDisplayRefreshRate(context)
                     }
                 }
             }

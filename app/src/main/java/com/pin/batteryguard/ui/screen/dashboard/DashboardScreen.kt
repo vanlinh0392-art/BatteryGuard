@@ -120,17 +120,17 @@ fun DashboardScreen(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(statusColor.copy(alpha = 0.12f))
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(8.dp)
+                        .size(6.dp)
                         .clip(CircleShape)
                         .background(statusColor)
                 )
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(5.dp))
                 Text(
                     text = statusLabel,
                     fontSize = 11.sp,
@@ -143,7 +143,7 @@ fun DashboardScreen(
         // Circular Gauge
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
         ) {
             BatteryGauge(
                 level = uiState.batteryState.level,
@@ -155,23 +155,24 @@ fun DashboardScreen(
         // Stats Card (Giám sát master + logs)
         Card(
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
             ),
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
         ) {
             Row(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = if (uiState.isMonitoring) "Tự động giám sát" else "Tạm dừng giám sát",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
+                        fontSize = 14.5.sp
                     )
                     Text(
                         text = "Quét khi khóa máy",
-                        fontSize = 12.sp,
+                        fontSize = 11.5.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                 }
@@ -184,25 +185,27 @@ fun DashboardScreen(
 
         // Quick Stats Row (Dừng hôm nay + Tiết kiệm pin)
         Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)),
+                shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Dừng hôm nay", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                    Text("${uiState.stoppedToday} apps", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text("Dừng hôm nay", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Text("${uiState.stoppedToday} apps", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
             }
             Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)),
+                shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Tiết kiệm ước tính", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                    Text(String.format(java.util.Locale.US, "~%.1f%%", uiState.savedPercent), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = BatteryFull)
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text("Tiết kiệm ước tính", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Text(String.format(java.util.Locale.US, "~%.1f%%", uiState.savedPercent), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = BatteryFull)
                 }
             }
         }

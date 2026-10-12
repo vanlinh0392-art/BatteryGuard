@@ -151,16 +151,29 @@ class AutomationViewModel @Inject constructor(
             ),
             AutomationRuleUiModel(
                 id = AutomationRuleId.OVERNIGHT_CHARGING,
-                title = "Bảo vệ sạc đêm",
-                subtitle = "Báo ngắt sạc pin",
+                title = "Quản lý sạc pin",
+                subtitle = when {
+                    config.overnightChargingParams.prioritizeFastChargeNoThrottle -> "Ưu tiên sạc nhanh • Bỏ qua hạ dòng"
+                    config.overnightChargingParams.fastCharge90WEnabled -> "Sạc nhanh 90W HyperCharge"
+                    else -> "Sạc thường • Giới hạn ${config.overnightChargingParams.maxChargeLimitPercent}%"
+                },
                 icon = Icons.Filled.BatteryChargingFull,
                 isEnabled = config.overnightChargingEnabled,
                 activeStatus = if (!config.isMasterEnabled || !config.overnightChargingEnabled) RuleActiveStatus.DISABLED
                 else runtimeStates[AutomationRuleId.OVERNIGHT_CHARGING]?.status ?: RuleActiveStatus.IDLE,
-                statusBadgeText = if (!config.isMasterEnabled || !config.overnightChargingEnabled) "Đã tắt"
-                else runtimeStates[AutomationRuleId.OVERNIGHT_CHARGING]?.badgeText ?: "Sẵn sàng",
-                statusDetail = if (!config.isMasterEnabled || !config.overnightChargingEnabled) "Đã tắt"
-                else runtimeStates[AutomationRuleId.OVERNIGHT_CHARGING]?.detailText ?: "Ngưỡng sạc: ${config.overnightChargingParams.maxChargeLimitPercent}%",
+                statusBadgeText = when {
+                    !config.isMasterEnabled || !config.overnightChargingEnabled -> "Đã tắt"
+                    config.overnightChargingParams.prioritizeFastChargeNoThrottle -> "Ưu tiên nhanh"
+                    config.overnightChargingParams.fastCharge90WEnabled -> "90W HyperCharge"
+                    else -> runtimeStates[AutomationRuleId.OVERNIGHT_CHARGING]?.badgeText ?: "Sẵn sàng"
+                },
+                statusDetail = when {
+                    !config.isMasterEnabled || !config.overnightChargingEnabled -> "Đã tắt"
+                    runtimeStates[AutomationRuleId.OVERNIGHT_CHARGING]?.detailText != null && runtimeStates[AutomationRuleId.OVERNIGHT_CHARGING]?.status == RuleActiveStatus.ACTIVE -> runtimeStates[AutomationRuleId.OVERNIGHT_CHARGING]!!.detailText
+                    config.overnightChargingParams.prioritizeFastChargeNoThrottle -> "Duy trì công suất sạc tối đa • Trần 48°C"
+                    config.overnightChargingParams.fastCharge90WEnabled -> "Sạc 90W • Ngưỡng dừng ${config.overnightChargingParams.maxChargeLimitPercent}%"
+                    else -> runtimeStates[AutomationRuleId.OVERNIGHT_CHARGING]?.detailText ?: "Ngưỡng sạc: ${config.overnightChargingParams.maxChargeLimitPercent}%"
+                },
                 params = config.overnightChargingParams
             ),
             AutomationRuleUiModel(
@@ -304,6 +317,7 @@ class AutomationViewModel @Inject constructor(
                 AutomationRuleId.OVERNIGHT_CHARGING -> {
                     (newParams as? OvernightChargingParams)?.let {
                         automationDataStore.updateOvernightChargingParams(it)
+                        SystemActionBridge.setFastChargingEnabled(context, it.fastCharge90WEnabled)
                     }
                 }
                 AutomationRuleId.LOW_BATTERY_SAVER -> {

@@ -33,6 +33,7 @@ import com.pin.batteryguard.permission.model.DynamicPermissionItem
 import com.pin.batteryguard.permission.model.PermissionCategory
 import com.pin.batteryguard.permission.model.PermissionPreset
 import com.pin.batteryguard.permission.model.PermissionStatus
+import com.pin.batteryguard.ui.components.*
 import com.pin.batteryguard.ui.theme.BatteryFull
 import com.pin.batteryguard.ui.theme.BatteryLow
 import com.pin.batteryguard.util.PackageHelper
@@ -94,37 +95,37 @@ fun PermissionGranterScreen(
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp)
         ) {
-            // Selected App Header Card (Lazy Icon Load)
+            // Selected App Header Card (Tối ưu padding và kích thước)
             uiState.selectedApp?.let { app ->
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 6.dp)
+                        .padding(vertical = 4.dp)
                         .clickable { showAppPickerSheet = true },
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
                     ),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(14.dp),
+                            .padding(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         AppIconLazyImage(
                             packageName = app.packageName,
                             modifier = Modifier
-                                .size(46.dp)
-                                .clip(RoundedCornerShape(12.dp))
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(10.dp))
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     text = app.appName,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp,
+                                    fontSize = 15.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -132,47 +133,62 @@ fun PermissionGranterScreen(
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Surface(
                                         color = MaterialTheme.colorScheme.tertiary,
-                                        shape = RoundedCornerShape(6.dp)
+                                        shape = RoundedCornerShape(4.dp)
                                     ) {
                                         Text(
                                             text = "App này",
-                                            fontSize = 10.sp,
+                                            fontSize = 9.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onTertiary,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
                                         )
                                     }
                                 } else if (app.isAutomationApp) {
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Surface(
                                         color = MaterialTheme.colorScheme.primary,
-                                        shape = RoundedCornerShape(6.dp)
+                                        shape = RoundedCornerShape(4.dp)
                                     ) {
                                         Text(
                                             text = "Auto",
-                                            fontSize = 10.sp,
+                                            fontSize = 9.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onPrimary,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
                                         )
                                     }
                                 } else if (app.isChatOrBankApp) {
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Surface(
                                         color = MaterialTheme.colorScheme.secondary,
-                                        shape = RoundedCornerShape(6.dp)
+                                        shape = RoundedCornerShape(4.dp)
                                     ) {
                                         Text(
                                             text = "Chat/Bank",
-                                            fontSize = 10.sp,
+                                            fontSize = 9.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onSecondary,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
+                                        )
+                                    }
+                                }
+                                if (app.isLockedInRecents) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                                        shape = RoundedCornerShape(4.dp)
+                                    ) {
+                                        Text(
+                                            text = "🔒 Recents",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
                                         )
                                     }
                                 }
                             }
-                            Spacer(modifier = Modifier.height(2.dp))
+                            Spacer(modifier = Modifier.height(1.dp))
                             Text(
                                 text = app.packageName,
                                 fontSize = 11.sp,
@@ -181,113 +197,86 @@ fun PermissionGranterScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
-                        IconButton(onClick = { showAppPickerSheet = true }) {
+                        IconButton(
+                            onClick = { showAppPickerSheet = true },
+                            modifier = Modifier.size(32.dp)
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.SwapHoriz,
                                 contentDescription = "Đổi ứng dụng",
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
                 }
             }
 
-            // Thanh kịch bản cấp quyền 1-chạm (1-Tap Presets Toolbar)
+            // Thanh kịch bản cấp quyền 1-chạm (1-Tap Presets Toolbar) - Tinh gọn, đồng bộ
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp)
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 // 1. Nền Bất Tử
-                FilledTonalButton(
+                CompactTonalChipButton(
+                    text = "🚀 Nền Bất Tử",
                     onClick = { viewModel.applyPreset(PermissionPreset.UNLIMITED_BACKGROUND) },
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                    shape = RoundedCornerShape(10.dp),
                     enabled = !uiState.isBatchProcessing && uiState.selectedApp != null
-                ) {
-                    Text("🚀 Nền Bất Tử", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
+                )
 
                 // 2. Safe Runtime
-                FilledTonalButton(
+                CompactTonalChipButton(
+                    text = "🛡️ Full Runtime",
                     onClick = { viewModel.applyPreset(PermissionPreset.SAFE_RUNTIME) },
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                    shape = RoundedCornerShape(10.dp),
                     enabled = !uiState.isBatchProcessing && uiState.selectedApp != null
-                ) {
-                    Text("🛡️ Full Runtime", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
+                )
 
                 // 3. Tool & Mod Nổi
-                FilledTonalButton(
+                CompactTonalChipButton(
+                    text = "⚙️ Tool/Overlay",
                     onClick = { viewModel.applyPreset(PermissionPreset.TOOLS_OVERLAY) },
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                    shape = RoundedCornerShape(10.dp),
                     enabled = !uiState.isBatchProcessing && uiState.selectedApp != null
-                ) {
-                    Text("⚙️ Tool/Overlay", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
+                )
 
                 // 4. Xiaomi Full (nếu là thiết bị Xiaomi)
                 if (uiState.isXiaomiDevice) {
-                    FilledTonalButton(
+                    CompactTonalChipButton(
+                        text = "⚡ Fix Xiaomi",
                         onClick = { viewModel.applyPreset(PermissionPreset.XIAOMI_FULL) },
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                        ),
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                         enabled = !uiState.isBatchProcessing && uiState.selectedApp != null
-                    ) {
-                        Text("⚡ Fix Xiaomi", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
+                    )
                 }
 
                 // 5. Hoàn tác Snapshot (Rollback)
                 if (uiState.hasSnapshotToRollback) {
-                    OutlinedButton(
+                    CompactTonalChipButton(
+                        text = if (uiState.isRollingBack) "Đang hoàn tác..." else "⏪ Hoàn tác",
                         onClick = { viewModel.rollbackLatestSnapshot() },
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        shape = RoundedCornerShape(10.dp),
+                        isLoading = uiState.isRollingBack,
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         enabled = !uiState.isRollingBack && uiState.selectedApp != null
-                    ) {
-                        if (uiState.isRollingBack) {
-                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                            Spacer(modifier = Modifier.width(4.dp))
-                        } else {
-                            Icon(Icons.Filled.Undo, contentDescription = null, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                        }
-                        Text("⏪ Hoàn tác", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
+                    )
                 }
             }
 
-            // Nút "Cấp tất cả quyền hợp lệ"
-            Button(
+            // Nút "Cấp tất cả quyền hợp lệ" chuẩn 40dp
+            StandardActionButton(
+                text = if (uiState.isBatchProcessing) "Đang thực thi siêu tốc..." else "⚡ Cấp tất cả quyền (${uiState.permissions.count { it.status == PermissionStatus.DENIED && it.isGrantable }})",
+                icon = if (uiState.isBatchProcessing) null else Icons.Filled.Check,
                 onClick = { viewModel.requestGrantAllPermissions() },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp),
-                shape = RoundedCornerShape(12.dp),
-                enabled = !uiState.isBatchProcessing && uiState.selectedApp != null
-            ) {
-                if (uiState.isBatchProcessing) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Đang thực thi siêu tốc qua Shell Pipeline...", fontWeight = FontWeight.Bold)
-                } else {
-                    Icon(imageVector = Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "⚡ Cấp tất cả quyền hợp lệ (${uiState.permissions.count { it.status == PermissionStatus.DENIED && it.isGrantable }})", fontWeight = FontWeight.Bold)
-                }
-            }
+                enabled = !uiState.isBatchProcessing && uiState.selectedApp != null,
+                isLoading = uiState.isBatchProcessing,
+                height = 40.dp
+            )
 
             Spacer(modifier = Modifier.height(4.dp))
 
@@ -392,66 +381,78 @@ fun PermissionGranterScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .fillMaxHeight(0.85f)
-                    .padding(16.dp)
+                    .fillMaxHeight(0.9f)
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
             ) {
-                Text(
-                    text = "Chọn ứng dụng cần cấp quyền",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
+                // Header gọn gàng: Tiêu đề nhỏ + Nút đóng nhanh
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Chọn ứng dụng cấp quyền",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    IconButton(
+                        onClick = { showAppPickerSheet = false },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Đóng",
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                // 1. Thanh tìm kiếm siêu gọn (ĐẨY LÊN CAO NHẤT)
+                CompactSearchBar(
+                    query = uiState.searchQuery,
+                    onQueryChange = { viewModel.setSearchQuery(it) },
+                    placeholder = "Tìm theo tên hoặc package...",
+                    modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(modifier = Modifier.height(8.dp))
 
-                // Thanh tìm kiếm
-                OutlinedTextField(
-                    value = uiState.searchQuery,
-                    onValueChange = { viewModel.setSearchQuery(it) },
-                    placeholder = { Text("Tìm kiếm theo tên hoặc package...") },
-                    leadingIcon = { Icon(imageVector = Icons.Filled.Search, contentDescription = null) },
-                    trailingIcon = {
-                        if (uiState.searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                                Icon(imageVector = Icons.Filled.Close, contentDescription = "Xóa")
-                            }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true
-                )
+                Spacer(modifier = Modifier.height(6.dp))
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Category Chips
+                // 2. Category Chips gọn gàng cao 28-30dp
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    FilterChip(
+                    CompactFilterChip(
                         selected = uiState.activeCategory == AppFilterCategory.AUTOMATION,
                         onClick = { viewModel.setCategory(AppFilterCategory.AUTOMATION) },
-                        label = { Text("✨ Tự động hóa (${uiState.allApps.count { it.isAutomationApp }})") }
+                        label = "Tự động (${uiState.allApps.count { it.isAutomationApp }})",
+                        icon = "✨"
                     )
-                    FilterChip(
+                    CompactFilterChip(
                         selected = uiState.activeCategory == AppFilterCategory.CHAT_AND_BANKING,
                         onClick = { viewModel.setCategory(AppFilterCategory.CHAT_AND_BANKING) },
-                        label = { Text("💬 Chat & Ngân hàng (${uiState.allApps.count { it.isChatOrBankApp }})") }
+                        label = "Chat/Bank (${uiState.allApps.count { it.isChatOrBankApp }})",
+                        icon = "💬"
                     )
-                    FilterChip(
+                    CompactFilterChip(
                         selected = uiState.activeCategory == AppFilterCategory.USER_INSTALLED,
                         onClick = { viewModel.setCategory(AppFilterCategory.USER_INSTALLED) },
-                        label = { Text("Ứng dụng đã cài (${uiState.allApps.count { !it.isSystem }})") }
+                        label = "Đã cài (${uiState.allApps.count { !it.isSystem }})"
                     )
-                    FilterChip(
+                    CompactFilterChip(
                         selected = uiState.activeCategory == AppFilterCategory.ALL,
                         onClick = { viewModel.setCategory(AppFilterCategory.ALL) },
-                        label = { Text("Tất cả (${uiState.allApps.size})") }
+                        label = "Tất cả (${uiState.allApps.size})"
                     )
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 if (uiState.isLoading) {
                     Box(
@@ -460,62 +461,26 @@ fun PermissionGranterScreen(
                             .weight(1f),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator()
+                        CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 2.5.dp)
                     }
                 } else {
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         items(uiState.filteredApps, key = { it.packageName }) { app ->
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        viewModel.selectApp(app)
-                                        showAppPickerSheet = false
-                                    },
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (uiState.selectedApp?.packageName == app.packageName)
-                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                                    else
-                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                                )
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    AppIconLazyImage(
-                                        packageName = app.packageName,
-                                        modifier = Modifier
-                                            .size(38.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = app.appName,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 14.sp,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = app.packageName,
-                                            fontSize = 11.sp,
-                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
+                            CompactAppPickerItem(
+                                appName = app.appName,
+                                packageName = app.packageName,
+                                isLockedInRecents = app.isLockedInRecents,
+                                isSelected = uiState.selectedApp?.packageName == app.packageName,
+                                onClick = {
+                                    viewModel.selectApp(app)
+                                    showAppPickerSheet = false
                                 }
-                            }
+                            )
                         }
                     }
                 }
@@ -525,7 +490,7 @@ fun PermissionGranterScreen(
 }
 
 /**
- * Thẻ hiển thị quyền động (Clean 100% - Không hiển thị quyền chưa khai báo)
+ * Thẻ hiển thị quyền động (Clean 100% - Tinh gọn, đồng bộ)
  */
 @Composable
 fun DynamicPermissionCardItem(
@@ -537,7 +502,7 @@ fun DynamicPermissionCardItem(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
         )
@@ -545,7 +510,7 @@ fun DynamicPermissionCardItem(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp)
+                .padding(10.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -555,7 +520,9 @@ fun DynamicPermissionCardItem(
                     Text(
                         text = item.label,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Row(
@@ -569,14 +536,14 @@ fun DynamicPermissionCardItem(
                         ) {
                             Text(
                                 text = "${item.category.emoji} ${item.category.displayName}",
-                                fontSize = 10.sp,
+                                fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.5.dp)
                             )
                         }
 
-                        // Status Badge: Chỉ có ĐÃ CẤP hoặc CHƯA CẤP (Hoàn toàn không có rác "CHƯA KHAI BÁO")
+                        // Status Badge
                         val badgeColor = when {
                             isGranted -> BatteryFull
                             isSignature -> Color(0xFFC62828)
@@ -593,10 +560,10 @@ fun DynamicPermissionCardItem(
                         ) {
                             Text(
                                 text = badgeText,
-                                fontSize = 10.sp,
+                                fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = badgeColor,
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.5.dp)
                             )
                         }
                     }
@@ -604,7 +571,7 @@ fun DynamicPermissionCardItem(
 
                 if (item.isProcessing) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
+                        modifier = Modifier.size(20.dp),
                         strokeWidth = 2.dp
                     )
                 } else {
@@ -617,62 +584,24 @@ fun DynamicPermissionCardItem(
             }
 
             if (!item.description.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = item.description,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    lineHeight = 16.sp
+                    lineHeight = 15.sp
                 )
             }
 
             // Ghi chú tên quyền hệ thống nhỏ gọn ở dưới
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = item.name,
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                fontSize = 9.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
-    }
-}
-
-/**
- * Lazy Image nạp Icon theo packageName qua PackageHelper (Zero-Bitmap State)
- */
-@Composable
-fun AppIconLazyImage(packageName: String, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    val drawable = remember(packageName) {
-        PackageHelper.getAppIcon(context, packageName)
-    }
-
-    if (drawable != null) {
-        val bitmap = remember(drawable) {
-            try {
-                drawable.toBitmap(96, 96)
-            } catch (_: Exception) {
-                null
-            }
-        }
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = null,
-                modifier = modifier
-            )
-            return
-        }
-    }
-
-    Box(
-        modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = Icons.Filled.PhoneAndroid,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }

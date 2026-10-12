@@ -38,6 +38,17 @@
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" />
+    <uses-permission android:name="android.permission.WRITE_SYNC_SETTINGS" />
+
+    <!-- Package queries for Assistant / Voice actions -->
+    <queries>
+        <package android:name="com.google.android.apps.bard" />
+        <package android:name="com.google.android.googlequicksearchbox" />
+        <package android:name="com.openai.chatgpt" />
+        <package android:name="com.miui.voiceassist" />
+        <package android:name="com.parallelc.micts" />
+    </queries>
 
     <application
         android:name=".BatteryGuardApp"
@@ -102,6 +113,18 @@
             <meta-data
                 android:name="android.accessibilityservice"
                 android:resource="@xml/app_shield_accessibility_service_config" />
+        </service>
+
+        <!-- Quick Settings Tile: Screen Translate (Google Lens) -->
+        <service
+            android:name=".service.ScreenTranslateTileService"
+            android:icon="@drawable/ic_translate"
+            android:label="Dịch màn hình (Lens)"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
         </service>
 
         <!-- Shizuku Provider -->

@@ -53,6 +53,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pin.batteryguard.ui.components.AppUsageCard
+import com.pin.batteryguard.ui.components.CompactFilterChip
+import com.pin.batteryguard.ui.components.CompactSearchBar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -120,95 +122,40 @@ fun AppListScreen(
                 exit = shrinkVertically() + fadeOut()
             ) {
                 Column {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(38.dp)
-                            .background(
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                RoundedCornerShape(10.dp)
-                            )
-                            .padding(horizontal = 10.dp),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Search,
-                                contentDescription = "Tìm kiếm",
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                modifier = Modifier.size(17.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Box(modifier = Modifier.weight(1f)) {
-                                if (uiState.searchQuery.isEmpty()) {
-                                    Text(
-                                        text = "Tìm ứng dụng...",
-                                        fontSize = 13.sp,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
-                                    )
-                                }
-                                BasicTextField(
-                                    value = uiState.searchQuery,
-                                    onValueChange = { viewModel.onSearchQueryChanged(it) },
-                                    singleLine = true,
-                                    textStyle = TextStyle(
-                                        fontSize = 13.sp,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    ),
-                                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                            if (uiState.searchQuery.isNotEmpty()) {
-                                IconButton(
-                                    onClick = { viewModel.onSearchQueryChanged("") },
-                                    modifier = Modifier.size(22.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Close,
-                                        contentDescription = "Xóa",
-                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
+                    CompactSearchBar(
+                        query = uiState.searchQuery,
+                        onQueryChange = { viewModel.onSearchQueryChanged(it) },
+                        placeholder = "Tìm ứng dụng...",
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     Spacer(modifier = Modifier.height(6.dp))
                 }
             }
 
-            // Hàng filter chips gọn gàng (height 30dp)
+            // Hàng filter chips gọn gàng chuẩn đồng bộ (height 30dp)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                FilterChip(
+                CompactFilterChip(
                     selected = uiState.selectedFilter == AppFilter.ALL,
                     onClick = { viewModel.onFilterSelected(AppFilter.ALL) },
-                    label = { Text("Tất cả", fontSize = 11.sp) },
-                    modifier = Modifier.height(30.dp)
+                    label = "Tất cả"
                 )
-                FilterChip(
+                CompactFilterChip(
                     selected = uiState.selectedFilter == AppFilter.RUNNING,
                     onClick = { viewModel.onFilterSelected(AppFilter.RUNNING) },
-                    label = { Text("Đang chạy", fontSize = 11.sp) },
-                    modifier = Modifier.height(30.dp)
+                    label = "Đang chạy"
                 )
-                FilterChip(
+                CompactFilterChip(
                     selected = uiState.selectedFilter == AppFilter.STOPPED,
                     onClick = { viewModel.onFilterSelected(AppFilter.STOPPED) },
-                    label = { Text("Đã dừng", fontSize = 11.sp) },
-                    modifier = Modifier.height(30.dp)
+                    label = "Đã dừng"
                 )
-                FilterChip(
+                CompactFilterChip(
                     selected = uiState.selectedFilter == AppFilter.SYSTEM,
                     onClick = { viewModel.onFilterSelected(AppFilter.SYSTEM) },
-                    label = { Text("Ngoại lệ", fontSize = 11.sp) },
-                    modifier = Modifier.height(30.dp)
+                    label = "Ngoại lệ"
                 )
             }
 

@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,6 +26,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -70,6 +73,7 @@ import com.pin.batteryguard.util.XiaomiHelper
 fun SettingsScreen(
     onNavigateToSetup: () -> Unit,
     onNavigateToPermissionGranter: () -> Unit = {},
+    onNavigateToExtendedSettings: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -314,6 +318,46 @@ fun SettingsScreen(
                 }
             }
 
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToExtendedSettings() },
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Tune,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Cài đặt mở rộng",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                        Text(
+                            text = "Khóa màn hình, tần số quét, animation, DNS & mạng",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                    )
+                }
+            }
+
             // Section 4: Xiaomi settings (Chỉ hiện nếu là máy Xiaomi)
             if (uiState.isXiaomi) {
                 Spacer(modifier = Modifier.height(12.dp))
@@ -323,17 +367,21 @@ fun SettingsScreen(
                     Button(
                         onClick = { XiaomiHelper.openAutoStartSettings(context) },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                        modifier = Modifier.weight(1f)
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f).height(38.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
                     ) {
-                        Text("Tự khởi chạy", fontSize = 12.sp)
+                        Text("Tự khởi chạy", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = { XiaomiHelper.openBatterySaverSettings(context) },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                        modifier = Modifier.weight(1f)
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f).height(38.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
                     ) {
-                        Text("Tiết kiệm pin", fontSize = 12.sp)
+                        Text("Tiết kiệm pin", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
                 }
 
@@ -341,9 +389,10 @@ fun SettingsScreen(
 
                 Button(
                     onClick = { viewModel.batchFixChatAndBankApps() },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().height(40.dp),
                     enabled = !uiState.isFixingXiaomi,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                 ) {
                     if (uiState.isFixingXiaomi) {
                         androidx.compose.material3.CircularProgressIndicator(
@@ -353,11 +402,17 @@ fun SettingsScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         val progressText = uiState.xiaomiProgress?.let { " (${it.first}/${it.second})" } ?: ""
-                        Text("Đang tối ưu thông báo$progressText...", fontSize = 12.sp)
+                        Text("Đang tối ưu thông báo$progressText...", fontSize = 12.sp, maxLines = 1)
                     } else {
                         Icon(Icons.Filled.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("⚡ Sửa thông báo tất cả App Chat & Ngân hàng", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = "⚡ Sửa thông báo tất cả App Chat & Ngân hàng",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
@@ -368,37 +423,40 @@ fun SettingsScreen(
             // Section 6: Phiên bản & Cập nhật GitHub
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(14.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column {
-                            Text("Phiên bản", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Phiên bản", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             Text("v${uiState.appVersion}", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         }
 
                         Button(
                             onClick = { viewModel.checkForUpdate(isUserInitiated = true) },
                             enabled = !uiState.isCheckingUpdate,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.height(34.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
                             if (uiState.isCheckingUpdate) {
                                 androidx.compose.material3.CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
+                                    modifier = Modifier.size(14.dp),
                                     strokeWidth = 2.dp,
                                     color = MaterialTheme.colorScheme.onPrimary
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Đang kiểm tra...", fontSize = 12.sp)
-                            } else {
-                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Kiểm tra cập nhật", fontSize = 12.sp)
+                                Text("Đang kiểm tra...", fontSize = 12.sp, maxLines = 1)
+                            } else {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Kiểm tra cập nhật", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                             }
                         }
                     }
@@ -418,9 +476,11 @@ fun SettingsScreen(
             Button(
                 onClick = { showClearDialog = true },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                modifier = Modifier.fillMaxWidth()
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth().height(38.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
             ) {
-                Text("Xóa lịch sử dữ liệu")
+                Text("Xóa lịch sử dữ liệu", fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -430,9 +490,11 @@ fun SettingsScreen(
                     android.widget.Toast.makeText(context, "Đã rã băng tất cả!", android.widget.Toast.LENGTH_SHORT).show()
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                modifier = Modifier.fillMaxWidth()
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth().height(38.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
             ) {
-                Text("Rã băng toàn bộ app")
+                Text("Rã băng toàn bộ app", fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             }
 
             // Reset Setup button (để debug/chạy lại setup wizard)
@@ -441,7 +503,7 @@ fun SettingsScreen(
                     viewModel.resetSetup()
                     onNavigateToSetup()
                 },
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                modifier = Modifier.fillMaxWidth().height(36.dp).padding(vertical = 2.dp)
             ) {
                 Text("Chạy lại hướng dẫn", fontSize = 12.sp)
             }
@@ -481,14 +543,20 @@ fun SettingsScreen(
                 confirmButton = {
                     Button(
                         onClick = { viewModel.downloadAndInstallUpdate(updateInfo) },
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.height(36.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
-                        Text("Tải & Cài đặt")
+                        Text("Tải & Cài đặt", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { viewModel.dismissUpdateDialog() }) {
-                        Text("Để sau")
+                    TextButton(
+                        onClick = { viewModel.dismissUpdateDialog() },
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        Text("Để sau", fontSize = 12.sp)
                     }
                 }
             )
@@ -506,14 +574,20 @@ fun SettingsScreen(
                             viewModel.clearAllData()
                             showClearDialog = false
                         },
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.height(36.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
-                        Text("Xác nhận")
+                        Text("Xác nhận", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showClearDialog = false }) {
-                        Text("Hủy")
+                    TextButton(
+                        onClick = { showClearDialog = false },
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        Text("Hủy", fontSize = 12.sp)
                     }
                 }
             )
