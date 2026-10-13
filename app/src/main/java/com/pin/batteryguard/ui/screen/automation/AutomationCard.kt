@@ -367,7 +367,7 @@ fun AutomationConfigEditor(
         // 1. 📶 Tự động tắt 4G khi có Wi-Fi
         AutomationRuleId.WIFI_AUTO_DATA -> {
             val config = params as? WifiAutoDataParams ?: WifiAutoDataParams()
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // A. Thời gian chờ TẮT 4G khi kết nối Wi-Fi (0 - 15 giây)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -434,15 +434,6 @@ fun AutomationConfigEditor(
                         )
                     }
                 }
-                Text(
-                    text = when (config.targetSim) {
-                        TargetSimSelection.AUTO -> "Hệ thống sẽ tự nhận diện SIM đang bật dữ liệu để bật/tắt chính xác."
-                        TargetSimSelection.SIM_1 -> "Chỉ áp dụng bật/tắt dữ liệu di động cho SIM ở Khe 1."
-                        TargetSimSelection.SIM_2 -> "Chỉ áp dụng bật/tắt dữ liệu di động cho SIM ở Khe 2."
-                    },
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                )
 
                 // C. Tự bật lại 4G khi mất Wi-Fi (0 - 15 giây)
                 Row(
@@ -450,14 +441,11 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Tự bật lại 4G khi mất Wi-Fi", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "Tự động khôi phục kết nối khi ra khỏi vùng phủ sóng Wi-Fi.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        text = "Tự bật lại 4G khi mất Wi-Fi",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
                     Switch(
                         checked = config.autoRestoreDataOnDisconnect,
                         onCheckedChange = { onUpdateParams(config.copy(autoRestoreDataOnDisconnect = it)) }
@@ -508,13 +496,6 @@ fun AutomationConfigEditor(
                                 )
                             }
                         }
-
-                        Text(
-                            text = if (config.restoreDelaySeconds == 0) "Khôi phục dữ liệu di động ngay lập tức khi vừa mất Wi-Fi."
-                            else "Chờ ${config.restoreDelaySeconds} giây trước khi bật lại 4G để chống rung lắc khi Wi-Fi chập chờn.",
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                        )
                     }
                 }
             }
@@ -550,9 +531,9 @@ fun AutomationConfigEditor(
                 )
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "Khung giờ ban đêm (Chạm vào ô để đổi giờ):",
+                    text = "Khung giờ ban đêm:",
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
                 )
                 Row(
@@ -580,7 +561,6 @@ fun AutomationConfigEditor(
                                 String.format("%02d:%02d", config.startHour, config.startMinute),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                             )
-                            Text("Chạm để đổi", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                         }
                     }
 
@@ -605,7 +585,6 @@ fun AutomationConfigEditor(
                                 String.format("%02d:%02d", config.endHour, config.endMinute),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                             )
-                            Text("Chạm để đổi", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                         }
                     }
                 }
@@ -632,7 +611,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Áp dụng cả thứ Bảy & Chủ Nhật", style = MaterialTheme.typography.bodyMedium)
+                    Text("Áp dụng cả cuối tuần (T7, CN)", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.applyOnWeekends,
                         onCheckedChange = { onUpdateParams(config.copy(applyOnWeekends = it)) }
@@ -671,21 +650,18 @@ fun AutomationConfigEditor(
                 )
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // 1. Sạc siêu nhanh 90W HyperCharge
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Sạc siêu nhanh (90W HyperCharge)", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
-                        Text(
-                            "Kích hoạt chip sạc Surge P2 trên Xiaomi",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        text = "Sạc siêu nhanh (90W HyperCharge)",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        modifier = Modifier.weight(1f)
+                    )
                     Switch(
                         checked = config.fastCharge90WEnabled,
                         onCheckedChange = { onUpdateParams(config.copy(fastCharge90WEnabled = it)) }
@@ -715,9 +691,9 @@ fun AutomationConfigEditor(
                             }
                         }
                         Text(
-                            "Bỏ qua hạ dòng khi ấm • Tự ngắt khẩn cấp nếu pin đạt 48°C",
+                            text = "48°C Fail-safe bảo vệ",
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.85f)
                         )
                     }
                     Switch(
@@ -732,7 +708,8 @@ fun AutomationConfigEditor(
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Ngưỡng sạc bảo vệ tuổi thọ:", style = MaterialTheme.typography.bodyMedium)
                     Text(
@@ -755,7 +732,7 @@ fun AutomationConfigEditor(
                 )
 
                 Text(
-                    text = "Khung giờ sạc đêm áp dụng (Chạm để đổi):",
+                    text = "Khung giờ sạc đêm áp dụng:",
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
                 )
                 Row(
@@ -783,7 +760,6 @@ fun AutomationConfigEditor(
                                 String.format("%02d:00", config.startHour),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                             )
-                            Text("Chạm để đổi", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                         }
                     }
 
@@ -808,7 +784,6 @@ fun AutomationConfigEditor(
                                 String.format("%02d:00", config.endHour),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                             )
-                            Text("Chạm để đổi", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                         }
                     }
                 }
@@ -818,14 +793,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Âm báo khi pin đạt ngưỡng", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "Phát chuông nhẹ nhắc rút sạc hoặc chuyển dòng thấp",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text("Âm báo khi pin đạt ngưỡng", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.alertSoundOnTarget,
                         onCheckedChange = { onUpdateParams(config.copy(alertSoundOnTarget = it)) }
@@ -837,14 +805,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Kiểm soát nhiệt độ sạc đêm", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "Giảm công suất sạc nếu pin vượt quá 40°C",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text("Kiểm soát nhiệt độ (< 40°C)", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.preventOverheat,
                         onCheckedChange = { onUpdateParams(config.copy(preventOverheat = it)) }
@@ -856,10 +817,11 @@ fun AutomationConfigEditor(
         // 4. ⚡ Tự động tiết kiệm pin khi pin yếu
         AutomationRuleId.LOW_BATTERY_SAVER -> {
             val config = params as? LowBatterySaverParams ?: LowBatterySaverParams()
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Kích hoạt khi mức pin dưới:", style = MaterialTheme.typography.bodyMedium)
                     Text(
@@ -886,7 +848,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Tự động giảm 30% độ sáng màn hình", style = MaterialTheme.typography.bodyMedium)
+                    Text("Giảm 30% độ sáng màn hình", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.dimDisplayBrightness,
                         onCheckedChange = { onUpdateParams(config.copy(dimDisplayBrightness = it)) }
@@ -898,7 +860,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Khóa tần số quét màn hình 60Hz", style = MaterialTheme.typography.bodyMedium)
+                    Text("Khóa tần số quét 60Hz", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.capRefreshRate60Hz,
                         onCheckedChange = { onUpdateParams(config.copy(capRefreshRate60Hz = it)) }
@@ -910,7 +872,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Bật Chế độ tiết kiệm pin Android", style = MaterialTheme.typography.bodyMedium)
+                    Text("Bật Tiết kiệm pin Android", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.enableSystemPowerSaver,
                         onCheckedChange = { onUpdateParams(config.copy(enableSystemPowerSaver = it)) }
@@ -922,7 +884,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Tắt Màn hình luôn bật (AOD)", style = MaterialTheme.typography.bodyMedium)
+                    Text("Tắt Màn hình luôn bật (AOD)", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.turnOffAodAndRadios,
                         onCheckedChange = { onUpdateParams(config.copy(turnOffAodAndRadios = it)) }
@@ -934,7 +896,7 @@ fun AutomationConfigEditor(
         // 5. 📴 Tối ưu sâu khi tắt màn hình
         AutomationRuleId.DEEP_SCREEN_OFF -> {
             val config = params as? DeepScreenOffParams ?: DeepScreenOffParams()
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     text = "Thời gian chờ sau khi tắt màn hình:",
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
@@ -956,14 +918,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Dọn dẹp app chạy ngầm hao pin", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "Buộc dừng các ứng dụng ngầm ngoài danh sách ngoại lệ",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text("Dọn dẹp app chạy ngầm hao pin", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.forceStopBackgroundDrainers,
                         onCheckedChange = { onUpdateParams(config.copy(forceStopBackgroundDrainers = it)) }
@@ -975,14 +930,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Kích hoạt chế độ Doze sâu (Deep Sleep)", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "Đưa CPU vào trạng thái nghỉ sâu nhất",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text("Chế độ Doze sâu (Deep Sleep)", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.enableDeepDoze,
                         onCheckedChange = { onUpdateParams(config.copy(enableDeepDoze = it)) }
@@ -994,14 +942,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Tự động tăng ${config.screenOnBrightnessIncreasePercent}% độ sáng khi mở màn hình", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "Khôi phục độ sáng rõ nét khi bật màn hình",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text("Tăng +${config.screenOnBrightnessIncreasePercent}% độ sáng khi mở màn hình", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.restoreBrightnessOnScreenOn,
                         onCheckedChange = { onUpdateParams(config.copy(restoreBrightnessOnScreenOn = it)) }
@@ -1062,24 +1003,17 @@ fun AutomationConfigEditor(
             val config = params as? AppStopManagementParams ?: AppStopManagementParams()
             var periodMenuExpanded by remember { mutableStateOf(false) }
 
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // A. Slider ngưỡng pin tiêu thụ (%/h)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Ngưỡng tiêu thụ pin:",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-                        )
-                        Text(
-                            text = "Tự động xử lý app vượt quá mức tiêu thụ này",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        text = "Ngưỡng tiêu thụ pin:",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+                    )
                     Text(
                         text = String.format(Locale.US, "%.1f%%/h", config.drainThresholdPercent),
                         style = MaterialTheme.typography.bodyMedium.copy(
@@ -1122,17 +1056,10 @@ fun AutomationConfigEditor(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Chu kỳ quét pin:",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-                        )
-                        Text(
-                            text = "Tần suất đánh giá và quét app ngầm",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        text = "Chu kỳ quét:",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+                    )
 
                     ExposedDropdownMenuBox(
                         expanded = periodMenuExpanded,
@@ -1171,14 +1098,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Tự động dừng app ngầm", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "Dừng thay vì cảnh báo",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text("Tự động dừng app ngầm", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.autoForceStop,
                         onCheckedChange = { onUpdateParams(config.copy(autoForceStop = it)) }
@@ -1190,14 +1110,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Báo cáo thông báo", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "Hiện thông báo khi dừng app",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text("Báo cáo thông báo khi dừng", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.notifyBeforeStop,
                         onCheckedChange = { onUpdateParams(config.copy(notifyBeforeStop = it)) }
@@ -1209,14 +1122,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Ẩn app hệ thống", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "Chỉ quét và xử lý ứng dụng người dùng cài",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text("Ẩn app hệ thống (Chỉ app cài)", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.excludeSystemApps,
                         onCheckedChange = { onUpdateParams(config.copy(excludeSystemApps = it)) }
@@ -1240,17 +1146,14 @@ fun AutomationConfigEditor(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { onUpdateParams(config.copy(enableFreezeMode = false)) }
-                                .padding(vertical = 6.dp)
+                                .padding(vertical = 4.dp)
                         ) {
                             RadioButton(
                                 selected = !config.enableFreezeMode,
                                 onClick = { onUpdateParams(config.copy(enableFreezeMode = false)) }
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Column {
-                                Text("Chỉ dừng app (Force Stop)", fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
-                                Text("Không đóng băng ngầm", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Chỉ dừng app (Force Stop)", fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
                         }
 
                         Row(
@@ -1258,17 +1161,14 @@ fun AutomationConfigEditor(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { onUpdateParams(config.copy(enableFreezeMode = true)) }
-                                .padding(vertical = 6.dp)
+                                .padding(vertical = 4.dp)
                         ) {
                             RadioButton(
                                 selected = config.enableFreezeMode,
                                 onClick = { onUpdateParams(config.copy(enableFreezeMode = true)) }
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Column {
-                                Text("Đóng băng tái phạm (Freeze)", fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
-                                Text("Đóng băng khi app tiếp tục tự khởi chạy", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Đóng băng tái phạm (Freeze)", fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
                         }
                     }
                 }
@@ -1280,7 +1180,7 @@ fun AutomationConfigEditor(
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(40.dp),
+                        .height(38.dp),
                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
                 ) {
                     Icon(

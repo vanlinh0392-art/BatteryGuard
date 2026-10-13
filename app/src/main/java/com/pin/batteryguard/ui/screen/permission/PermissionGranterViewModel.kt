@@ -3,6 +3,7 @@ package com.pin.batteryguard.ui.screen.permission
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pin.batteryguard.permission.UniversalPermissionManager
@@ -71,8 +72,11 @@ data class PermissionGranterUiState(
 class PermissionGranterViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val permissionManager: UniversalPermissionManager,
-    private val xiaomiFixManager: com.pin.batteryguard.permission.XiaomiNotificationFixManager
+    private val xiaomiFixManager: com.pin.batteryguard.permission.XiaomiNotificationFixManager,
+    savedStateHandle: SavedStateHandle
 ) : ViewModel() {
+
+    private val initialPackageName: String? = savedStateHandle.get<String>("pkg")?.takeIf { it.isNotBlank() }
 
     private val _uiState = MutableStateFlow(PermissionGranterUiState())
     val uiState: StateFlow<PermissionGranterUiState> = _uiState.asStateFlow()
@@ -170,16 +174,33 @@ class PermissionGranterViewModel @Inject constructor(
             )
 
             val defaultApp = appList.firstOrNull { it.isSelfApp } ?: appList.firstOrNull()
+            val targetApp = if (initialPackageName != null) {
+                appList.firstOrNull { it.packageName == initialPackageName } ?: defaultApp
+            } else {
+                defaultApp
+            }
+
+            val category = if (initialPackageName != null && targetApp != null) {
+                when {
+                    targetApp.isAutomationApp -> AppFilterCategory.AUTOMATION
+                    targetApp.isChatOrBankApp -> AppFilterCategory.CHAT_AND_BANKING
+                    !targetApp.isSystem -> AppFilterCategory.USER_INSTALLED
+                    else -> AppFilterCategory.ALL
+                }
+            } else {
+                _uiState.value.activeCategory
+            }
 
             _uiState.update {
                 it.copy(
                     allApps = appList,
                     isLoading = false,
-                    selectedApp = defaultApp
+                    selectedApp = targetApp,
+                    activeCategory = category
                 )
             }
             filterApps()
-            defaultApp?.let { selectApp(it) }
+            targetApp?.let { selectApp(it) }
         }
     }
 

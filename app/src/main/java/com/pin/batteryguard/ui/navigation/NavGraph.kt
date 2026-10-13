@@ -27,10 +27,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.pin.batteryguard.ui.screen.apps.AppListScreen
 import com.pin.batteryguard.ui.screen.dashboard.DashboardScreen
 import com.pin.batteryguard.ui.screen.exceptions.ExceptionListScreen
@@ -60,7 +62,9 @@ sealed class Screen(
     data object History : Screen("history", "Lịch sử", Icons.Filled.History, Icons.Outlined.History)
     data object Settings : Screen("settings", "Cài đặt", Icons.Filled.Settings, Icons.Outlined.Settings)
     data object Setup : Screen("setup", "Thiết lập", Icons.Filled.Settings, Icons.Outlined.Settings)
-    data object PermissionGranter : Screen("permission_granter", "Cấp quyền", Icons.Filled.Shield, Icons.Outlined.Shield)
+    data object PermissionGranter : Screen("permission_granter?pkg={pkg}", "Cấp quyền", Icons.Filled.Shield, Icons.Outlined.Shield) {
+        fun createRoute(pkg: String? = null): String = if (pkg.isNullOrBlank()) "permission_granter" else "permission_granter?pkg=$pkg"
+    }
     data object AppShield : Screen("app_shield", "Bảo vệ", Icons.Filled.Shield, Icons.Outlined.Shield)
     data object ExtendedSettings : Screen("extended_settings", "Cài đặt mở rộng", Icons.Filled.Tune, Icons.Outlined.Tune)
 }
@@ -81,7 +85,7 @@ fun BatteryGuardNavHost() {
 
     // Ẩn bottom bar ở setup wizard, permission granter và extended settings
     val showBottomBar = currentDestination?.route != Screen.Setup.route &&
-            currentDestination?.route != Screen.PermissionGranter.route &&
+            currentDestination?.route?.startsWith("permission_granter") != true &&
             currentDestination?.route != Screen.ExtendedSettings.route
 
     Scaffold(
@@ -168,7 +172,11 @@ fun BatteryGuardNavHost() {
                 )
             }
             composable(Screen.Apps.route) {
-                AppListScreen()
+                AppListScreen(
+                    onNavigateToPermissionGranter = { pkg ->
+                        navController.navigate(Screen.PermissionGranter.createRoute(pkg))
+                    }
+                )
             }
             composable(Screen.Automation.route) {
                 AutomationScreen(
@@ -189,14 +197,23 @@ fun BatteryGuardNavHost() {
                         navController.navigate(Screen.Setup.route)
                     },
                     onNavigateToPermissionGranter = {
-                        navController.navigate(Screen.PermissionGranter.route)
+                        navController.navigate(Screen.PermissionGranter.createRoute())
                     },
                     onNavigateToExtendedSettings = {
                         navController.navigate(Screen.ExtendedSettings.route)
                     }
                 )
             }
-            composable(Screen.PermissionGranter.route) {
+            composable(
+                route = Screen.PermissionGranter.route,
+                arguments = listOf(
+                    navArgument("pkg") {
+                        type = NavType.StringType
+                        defaultValue = ""
+                        nullable = true
+                    }
+                )
+            ) {
                 PermissionGranterScreen(
                     onNavigateBack = {
                         navController.popBackStack()
@@ -216,7 +233,7 @@ fun BatteryGuardNavHost() {
                         navController.popBackStack()
                     },
                     onNavigateToPermissionGranter = {
-                        navController.navigate(Screen.PermissionGranter.route)
+                        navController.navigate("permission_granter")
                     }
                 )
             }

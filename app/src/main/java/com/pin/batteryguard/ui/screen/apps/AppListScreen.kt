@@ -59,7 +59,8 @@ import com.pin.batteryguard.ui.components.CompactSearchBar
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppListScreen(
-    viewModel: AppListViewModel = hiltViewModel()
+    viewModel: AppListViewModel = hiltViewModel(),
+    onNavigateToPermissionGranter: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val lazyListState = rememberLazyListState()
@@ -191,7 +192,8 @@ fun AppListScreen(
                             onForceStop = { viewModel.forceStopApp(appInfo) },
                             onFreeze = { viewModel.freezeApp(appInfo) },
                             onAddException = { viewModel.addToException(appInfo.packageName, appInfo.appName) },
-                            onAllowActiveUseStop = { viewModel.allowActiveUseStop(appInfo) }
+                            onAllowActiveUseStop = { viewModel.allowActiveUseStop(appInfo) },
+                            onAppClick = { onNavigateToPermissionGranter(appInfo.packageName) }
                         )
                     }
                 }

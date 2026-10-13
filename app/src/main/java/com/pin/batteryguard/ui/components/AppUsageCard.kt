@@ -34,14 +34,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.pin.batteryguard.domain.model.AppBatteryInfo
-import com.pin.batteryguard.util.XiaomiHelper
 import java.util.Locale
 
 @Composable
@@ -51,10 +49,9 @@ fun AppUsageCard(
     onFreeze: () -> Unit,
     onAddException: () -> Unit,
     onAllowActiveUseStop: () -> Unit = {},
+    onAppClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
@@ -63,7 +60,7 @@ fun AppUsageCard(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 2.dp)
-            .clickable { XiaomiHelper.openAppPermissionEditor(context, appInfo.packageName) }
+            .clickable { onAppClick() }
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
