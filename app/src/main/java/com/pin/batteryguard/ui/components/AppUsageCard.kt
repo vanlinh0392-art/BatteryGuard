@@ -17,7 +17,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shield
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -42,6 +43,7 @@ import androidx.core.graphics.drawable.toBitmap
 import com.pin.batteryguard.domain.model.AppBatteryInfo
 import java.util.Locale
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AppUsageCard(
     appInfo: AppBatteryInfo,
@@ -50,6 +52,7 @@ fun AppUsageCard(
     onAddException: () -> Unit,
     onAllowActiveUseStop: () -> Unit = {},
     onAppClick: () -> Unit = {},
+    onAppLongClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -60,7 +63,10 @@ fun AppUsageCard(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 2.dp)
-            .clickable { onAppClick() }
+            .combinedClickable(
+                onClick = onAppClick,
+                onLongClick = onAppLongClick
+            )
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)

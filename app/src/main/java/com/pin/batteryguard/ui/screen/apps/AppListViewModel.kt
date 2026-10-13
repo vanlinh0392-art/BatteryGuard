@@ -335,6 +335,14 @@ class AppListViewModel @Inject constructor(
         }
     }
 
+    fun removeFromException(packageName: String, appName: String) {
+        viewModelScope.launch {
+            appRepository.removeException(packageName)
+            _uiState.update { it.copy(actionResult = "Đã bỏ $appName khỏi danh sách ngoại lệ") }
+            loadApps()
+        }
+    }
+
     fun allowActiveUseStop(app: AppBatteryInfo) {
         viewModelScope.launch {
             batteryRepository.setActiveUseStopAllowed(app.packageName, app.userId, true)
