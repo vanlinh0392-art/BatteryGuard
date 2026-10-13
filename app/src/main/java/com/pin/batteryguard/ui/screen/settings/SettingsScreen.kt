@@ -188,7 +188,7 @@ fun SettingsScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.weight(1f).height(38.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                     ) {
                         Text("Tự khởi chạy", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
@@ -198,7 +198,7 @@ fun SettingsScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.weight(1f).height(38.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                     ) {
                         Text("Tiết kiệm pin", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
@@ -206,32 +206,63 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Button(
-                    onClick = { viewModel.batchFixChatAndBankApps() },
-                    modifier = Modifier.fillMaxWidth().height(38.dp),
-                    enabled = !uiState.isFixingXiaomi,
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-                ) {
-                    if (uiState.isFixingXiaomi) {
-                        androidx.compose.material3.CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        val progressText = uiState.xiaomiProgress?.let { " (${it.first}/${it.second})" } ?: ""
-                        Text("Đang tối ưu thông báo$progressText...", fontSize = 12.sp, maxLines = 1)
-                    } else {
-                        Icon(Icons.Filled.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "⚡ Tối ưu thông báo Chat & Bank",
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = { viewModel.batchFixChatAndBankApps() },
+                        modifier = Modifier.weight(1f).height(38.dp),
+                        enabled = !uiState.isFixingXiaomi,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        if (uiState.isFixingXiaomi) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            val progressText = uiState.xiaomiProgress?.let { " (${it.first}/${it.second})" } ?: ""
+                            Text("Đang tối ưu$progressText...", fontSize = 11.sp, maxLines = 1)
+                        } else {
+                            Icon(Icons.Filled.Bolt, contentDescription = null, modifier = Modifier.size(15.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Thông báo Bank",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = { viewModel.checkForUpdate(isUserInitiated = true) },
+                        modifier = Modifier.weight(1f).height(38.dp),
+                        enabled = !uiState.isCheckingUpdate,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        if (uiState.isCheckingUpdate) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Đang kiểm tra...", fontSize = 11.sp, maxLines = 1)
+                        } else {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(15.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Kiểm tra cập nhật",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
             }
@@ -239,23 +270,23 @@ fun SettingsScreen(
             // Section 5: Dữ liệu
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Section 6: Phiên bản & Cập nhật GitHub
+            // Section 6: Phiên bản
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column {
-                            Text("Phiên bản", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            Text("v${uiState.appVersion}", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                        }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("Phiên bản", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("v${uiState.appVersion}", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    }
 
+                    if (!uiState.isXiaomi) {
                         Button(
                             onClick = { viewModel.checkForUpdate(isUserInitiated = true) },
                             enabled = !uiState.isCheckingUpdate,
