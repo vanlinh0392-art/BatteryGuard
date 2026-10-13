@@ -353,7 +353,7 @@ fun AutomationStatusBadge(
 }
 
 /**
- * Bộ biên tập tham số cấu hình riêng biệt cho từng loại quy tắc
+ * Bộ biên tập tham số cấu hình siêu tinh gọn cho từng loại quy tắc (UI/UX Pro Max)
  */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -367,19 +367,19 @@ fun AutomationConfigEditor(
         // 1. 📶 Tự động tắt 4G khi có Wi-Fi
         AutomationRuleId.WIFI_AUTO_DATA -> {
             val config = params as? WifiAutoDataParams ?: WifiAutoDataParams()
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // A. Thời gian chờ TẮT 4G khi kết nối Wi-Fi (0 - 15 giây)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                // A. Thời gian chờ TẮT 4G khi có Wi-Fi
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Thời gian trễ tắt 4G khi có Wi-Fi:",
+                        text = "Trễ tắt 4G:",
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
                     )
                     Text(
-                        text = if (config.delaySeconds == 0) "Tức thì (0s)" else "${config.delaySeconds} giây",
+                        text = if (config.delaySeconds == 0) "Tức thì (0s)" else "${config.delaySeconds}s",
                         style = MaterialTheme.typography.bodyMedium.copy(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
@@ -398,44 +398,41 @@ fun AutomationConfigEditor(
                     )
                 )
 
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(0 to "0s (Tức thì)", 3 to "3s", 5 to "5s", 10 to "10s", 15 to "15s").forEach { (sec, label) ->
-                        FilterChip(
-                            selected = config.delaySeconds == sec,
-                            onClick = { onUpdateParams(config.copy(delaySeconds = sec)) },
-                            label = { Text(label, fontSize = 11.5.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.primary
-                            )
-                        )
-                    }
-                }
-
                 // B. Lựa chọn SIM
-                Text(
-                    text = "Áp dụng cho SIM:",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-                )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(
-                        TargetSimSelection.AUTO to "Tự động (SIM data)",
-                        TargetSimSelection.SIM_1 to "SIM 1",
-                        TargetSimSelection.SIM_2 to "SIM 2"
-                    ).forEach { (simChoice, label) ->
-                        FilterChip(
-                            selected = config.targetSim == simChoice,
-                            onClick = { onUpdateParams(config.copy(targetSim = simChoice)) },
-                            label = { Text(label, fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.primary
-                            )
-                        )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Áp dụng SIM:",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(
+                            TargetSimSelection.AUTO to "Tự động",
+                            TargetSimSelection.SIM_1 to "SIM 1",
+                            TargetSimSelection.SIM_2 to "SIM 2"
+                        ).forEach { (simChoice, label) ->
+                            val isSelected = config.targetSim == simChoice
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.clickable { onUpdateParams(config.copy(targetSim = simChoice)) }
+                            ) {
+                                Text(
+                                    text = label,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                                )
+                            }
+                        }
                     }
                 }
 
-                // C. Tự bật lại 4G khi mất Wi-Fi (0 - 15 giây)
+                // C. Tự bật lại 4G khi mất Wi-Fi
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -453,18 +450,18 @@ fun AutomationConfigEditor(
                 }
 
                 AnimatedVisibility(visible = config.autoRestoreDataOnDisconnect) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Thời gian trễ bật lại 4G:",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+                                text = "Trễ bật lại 4G:",
+                                style = MaterialTheme.typography.bodySmall
                             )
                             Text(
-                                text = if (config.restoreDelaySeconds == 0) "Tức thì (0s)" else "${config.restoreDelaySeconds} giây",
+                                text = if (config.restoreDelaySeconds == 0) "Tức thì (0s)" else "${config.restoreDelaySeconds}s",
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary
@@ -482,20 +479,6 @@ fun AutomationConfigEditor(
                                 activeTrackColor = MaterialTheme.colorScheme.primary
                             )
                         )
-
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf(0 to "0s (Tức thì)", 2 to "2s", 3 to "3s", 5 to "5s", 10 to "10s", 15 to "15s").forEach { (sec, label) ->
-                                FilterChip(
-                                    selected = config.restoreDelaySeconds == sec,
-                                    onClick = { onUpdateParams(config.copy(restoreDelaySeconds = sec)) },
-                                    label = { Text(label, fontSize = 11.5.sp) },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                        selectedLabelColor = MaterialTheme.colorScheme.primary
-                                    )
-                                )
-                            }
-                        }
                     }
                 }
             }
@@ -509,7 +492,7 @@ fun AutomationConfigEditor(
 
             if (showStartTimePicker) {
                 AutomationTimePickerDialog(
-                    title = "Giờ bắt đầu chuyển Rung/Im lặng",
+                    title = "Giờ bắt đầu Rung/Im lặng",
                     initialHour = config.startHour,
                     initialMinute = config.startMinute,
                     onDismissRequest = { showStartTimePicker = false },
@@ -521,7 +504,7 @@ fun AutomationConfigEditor(
 
             if (showEndTimePicker) {
                 AutomationTimePickerDialog(
-                    title = "Giờ kết thúc (Bật lại chuông thường)",
+                    title = "Giờ bật lại chuông thường",
                     initialHour = config.endHour,
                     initialMinute = config.endMinute,
                     onDismissRequest = { showEndTimePicker = false },
@@ -531,79 +514,80 @@ fun AutomationConfigEditor(
                 )
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "Khung giờ ban đêm:",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                // Khung giờ ngang gọn
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { showStartTimePicker = true }
+                    Text(
+                        text = "Khung giờ đêm:",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Bắt đầu", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                                Icon(Icons.Filled.AccessTime, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-                            }
-                            Spacer(modifier = Modifier.height(2.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.clickable { showStartTimePicker = true }
+                        ) {
                             Text(
-                                String.format("%02d:%02d", config.startHour, config.startMinute),
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                String.format(Locale.US, "%02d:%02d", config.startHour, config.startMinute),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                             )
                         }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { showEndTimePicker = true }
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Kết thúc", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                                Icon(Icons.Filled.AccessTime, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-                            }
-                            Spacer(modifier = Modifier.height(2.dp))
+                        Text("➔", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.clickable { showEndTimePicker = true }
+                        ) {
                             Text(
-                                String.format("%02d:%02d", config.endHour, config.endMinute),
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                String.format(Locale.US, "%02d:%02d", config.endHour, config.endMinute),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                             )
                         }
                     }
                 }
 
-                Text(
-                    text = "Chế độ chuông ban đêm:",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = config.nightMode == RingerTargetMode.VIBRATE,
-                        onClick = { onUpdateParams(config.copy(nightMode = RingerTargetMode.VIBRATE)) },
-                        label = { Text("📳 Rung (Khuyên dùng)") }
+                // Chế độ chuông segmented pill
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Chế độ:",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
                     )
-                    FilterChip(
-                        selected = config.nightMode == RingerTargetMode.SILENT,
-                        onClick = { onUpdateParams(config.copy(nightMode = RingerTargetMode.SILENT)) },
-                        label = { Text("🔇 Im lặng tuyệt đối") }
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(
+                            RingerTargetMode.VIBRATE to "📳 Rung",
+                            RingerTargetMode.SILENT to "🔇 Im lặng"
+                        ).forEach { (mode, label) ->
+                            val isSelected = config.nightMode == mode
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.clickable { onUpdateParams(config.copy(nightMode = mode)) }
+                            ) {
+                                Text(
+                                    text = label,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                )
+                            }
+                        }
+                    }
                 }
 
                 Row(
@@ -650,8 +634,8 @@ fun AutomationConfigEditor(
                 )
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // 1. Sạc siêu nhanh 90W HyperCharge
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                // 1. Sạc siêu nhanh 90W
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -668,33 +652,29 @@ fun AutomationConfigEditor(
                     )
                 }
 
-                // 2. Ưu tiên Sạc Nhanh Tối Đa (Bypass Thermal Throttling)
+                // 2. Ưu tiên Sạc Tối Đa
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Ưu tiên Sạc Nhanh Tối Đa", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f)
-                            ) {
-                                Text(
-                                    text = "MAX",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                )
-                            }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Ưu tiên Sạc Tối Đa", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f)
+                        ) {
+                            Text(
+                                text = "48°C Fail-safe",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
                         }
-                        Text(
-                            text = "48°C Fail-safe bảo vệ",
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.85f)
-                        )
                     }
                     Switch(
                         checked = config.prioritizeFastChargeNoThrottle,
@@ -702,19 +682,16 @@ fun AutomationConfigEditor(
                     )
                 }
 
-                HorizontalDivider(
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
-                    thickness = 0.5.dp
-                )
+                // 3. Ngưỡng sạc
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Ngưỡng sạc bảo vệ tuổi thọ:", style = MaterialTheme.typography.bodyMedium)
+                    Text("Ngưỡng sạc bảo vệ pin:", style = MaterialTheme.typography.bodyMedium)
                     Text(
                         "${config.maxChargeLimitPercent}%",
-                        style = MaterialTheme.typography.bodyLarge.copy(
+                        style = MaterialTheme.typography.bodyMedium.copy(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -731,58 +708,43 @@ fun AutomationConfigEditor(
                     )
                 )
 
-                Text(
-                    text = "Khung giờ sạc đêm áp dụng:",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-                )
+                // 4. Khung giờ
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { showOvernightStartPicker = true }
+                    Text(
+                        text = "Khung giờ sạc đêm:",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Bắt đầu", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                                Icon(Icons.Filled.AccessTime, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-                            }
-                            Spacer(modifier = Modifier.height(2.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.clickable { showOvernightStartPicker = true }
+                        ) {
                             Text(
-                                String.format("%02d:00", config.startHour),
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                String.format(Locale.US, "%02d:00", config.startHour),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                             )
                         }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { showOvernightEndPicker = true }
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Kết thúc", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                                Icon(Icons.Filled.AccessTime, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-                            }
-                            Spacer(modifier = Modifier.height(2.dp))
+                        Text("➔", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.clickable { showOvernightEndPicker = true }
+                        ) {
                             Text(
-                                String.format("%02d:00", config.endHour),
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                String.format(Locale.US, "%02d:00", config.endHour),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                             )
                         }
                     }
@@ -793,7 +755,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Âm báo khi pin đạt ngưỡng", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text("Âm báo đầy pin", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.alertSoundOnTarget,
                         onCheckedChange = { onUpdateParams(config.copy(alertSoundOnTarget = it)) }
@@ -805,7 +767,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Kiểm soát nhiệt độ (< 40°C)", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text("Chống quá nhiệt (< 40°C)", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.preventOverheat,
                         onCheckedChange = { onUpdateParams(config.copy(preventOverheat = it)) }
@@ -817,16 +779,16 @@ fun AutomationConfigEditor(
         // 4. ⚡ Tự động tiết kiệm pin khi pin yếu
         AutomationRuleId.LOW_BATTERY_SAVER -> {
             val config = params as? LowBatterySaverParams ?: LowBatterySaverParams()
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Kích hoạt khi mức pin dưới:", style = MaterialTheme.typography.bodyMedium)
+                    Text("Mức pin kích hoạt:", style = MaterialTheme.typography.bodyMedium)
                     Text(
                         "${config.thresholdPercent}%",
-                        style = MaterialTheme.typography.bodyLarge.copy(
+                        style = MaterialTheme.typography.bodyMedium.copy(
                             fontWeight = FontWeight.Bold,
                             color = BatteryLow
                         )
@@ -848,7 +810,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Giảm 30% độ sáng màn hình", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text("Giảm 30% độ sáng", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.dimDisplayBrightness,
                         onCheckedChange = { onUpdateParams(config.copy(dimDisplayBrightness = it)) }
@@ -860,7 +822,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Khóa tần số quét 60Hz", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text("Khóa tần số 60Hz", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.capRefreshRate60Hz,
                         onCheckedChange = { onUpdateParams(config.copy(capRefreshRate60Hz = it)) }
@@ -872,7 +834,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Bật Tiết kiệm pin Android", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text("Bật Tiết kiệm pin hệ thống", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.enableSystemPowerSaver,
                         onCheckedChange = { onUpdateParams(config.copy(enableSystemPowerSaver = it)) }
@@ -896,20 +858,33 @@ fun AutomationConfigEditor(
         // 5. 📴 Tối ưu sâu khi tắt màn hình
         AutomationRuleId.DEEP_SCREEN_OFF -> {
             val config = params as? DeepScreenOffParams ?: DeepScreenOffParams()
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "Thời gian chờ sau khi tắt màn hình:",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-                )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    listOf(1 to "1 phút", 3 to "3 phút", 5 to "5 phút", 10 to "10 phút").forEach { (min, label) ->
-                        FilterChip(
-                            selected = config.delayMinutes == min,
-                            onClick = { onUpdateParams(config.copy(delayMinutes = min)) },
-                            label = { Text(label, fontSize = 12.sp) }
-                        )
+                    Text(
+                        text = "Trễ sau khi tắt màn:",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(1 to "1p", 3 to "3p", 5 to "5p", 10 to "10p").forEach { (min, label) ->
+                            val isSelected = config.delayMinutes == min
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.clickable { onUpdateParams(config.copy(delayMinutes = min)) }
+                            ) {
+                                Text(
+                                    text = label,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -918,7 +893,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Dọn dẹp app chạy ngầm hao pin", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text("Dọn app ngầm hao pin", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.forceStopBackgroundDrainers,
                         onCheckedChange = { onUpdateParams(config.copy(forceStopBackgroundDrainers = it)) }
@@ -930,7 +905,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Chế độ Doze sâu (Deep Sleep)", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text("Doze sâu (Deep Sleep)", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.enableDeepDoze,
                         onCheckedChange = { onUpdateParams(config.copy(enableDeepDoze = it)) }
@@ -942,7 +917,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Tăng +${config.screenOnBrightnessIncreasePercent}% độ sáng khi mở màn hình", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text("Tăng sáng khi mở màn", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.restoreBrightnessOnScreenOn,
                         onCheckedChange = { onUpdateParams(config.copy(restoreBrightnessOnScreenOn = it)) }
@@ -950,18 +925,15 @@ fun AutomationConfigEditor(
                 }
 
                 AnimatedVisibility(visible = config.restoreBrightnessOnScreenOn) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            Text("Mức tăng khi mở:", style = MaterialTheme.typography.bodySmall)
                             Text(
-                                text = "Mức tăng khi bật sáng:",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                            Text(
-                                text = "+${config.screenOnBrightnessIncreasePercent}%",
+                                "+${config.screenOnBrightnessIncreasePercent}%",
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary
@@ -979,20 +951,6 @@ fun AutomationConfigEditor(
                                 activeTrackColor = MaterialTheme.colorScheme.primary
                             )
                         )
-
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf(5, 10, 15, 20, 30).forEach { p ->
-                                FilterChip(
-                                    selected = config.screenOnBrightnessIncreasePercent == p,
-                                    onClick = { onUpdateParams(config.copy(screenOnBrightnessIncreasePercent = p)) },
-                                    label = { Text("+$p%", fontSize = 11.5.sp) },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                        selectedLabelColor = MaterialTheme.colorScheme.primary
-                                    )
-                                )
-                            }
-                        }
                     }
                 }
             }
@@ -1001,9 +959,8 @@ fun AutomationConfigEditor(
         // 6. 🛑 Dừng & Đóng băng ứng dụng hao pin ngầm
         AutomationRuleId.APP_STOP_MANAGEMENT -> {
             val config = params as? AppStopManagementParams ?: AppStopManagementParams()
-            var periodMenuExpanded by remember { mutableStateOf(false) }
 
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 // A. Slider ngưỡng pin tiêu thụ (%/h)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1036,21 +993,7 @@ fun AutomationConfigEditor(
                     )
                 )
 
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(0.5f to "0.5%/h", 1.0f to "1.0%/h (Chuẩn)", 1.5f to "1.5%/h", 2.0f to "2.0%/h").forEach { (th, label) ->
-                        FilterChip(
-                            selected = (config.drainThresholdPercent - th).let { it >= -0.05f && it <= 0.05f },
-                            onClick = { onUpdateParams(config.copy(drainThresholdPercent = th)) },
-                            label = { Text(label, fontSize = 11.5.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.primary
-                            )
-                        )
-                    }
-                }
-
-                // B. Dropdown chu kỳ quét
+                // B. Chu kỳ quét 1 chạm
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1060,32 +1003,20 @@ fun AutomationConfigEditor(
                         text = "Chu kỳ quét:",
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
                     )
-
-                    ExposedDropdownMenuBox(
-                        expanded = periodMenuExpanded,
-                        onExpandedChange = { periodMenuExpanded = it }
-                    ) {
-                        OutlinedTextField(
-                            value = "${config.monitoringPeriodMinutes} phút",
-                            onValueChange = {},
-                            readOnly = true,
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = periodMenuExpanded) },
-                            modifier = Modifier
-                                .width(135.dp)
-                                .menuAnchor(),
-                            textStyle = MaterialTheme.typography.bodyMedium
-                        )
-                        ExposedDropdownMenu(
-                            expanded = periodMenuExpanded,
-                            onDismissRequest = { periodMenuExpanded = false }
-                        ) {
-                            listOf(10, 15, 20, 30).forEach { mins ->
-                                DropdownMenuItem(
-                                    text = { Text("$mins phút") },
-                                    onClick = {
-                                        onUpdateParams(config.copy(monitoringPeriodMinutes = mins))
-                                        periodMenuExpanded = false
-                                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(10, 15, 20, 30).forEach { mins ->
+                            val isSelected = config.monitoringPeriodMinutes == mins
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.clickable { onUpdateParams(config.copy(monitoringPeriodMinutes = mins)) }
+                            ) {
+                                Text(
+                                    text = "$mins phút",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
                                 )
                             }
                         }
@@ -1098,7 +1029,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Tự động dừng app ngầm", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text("Tự động dừng app", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.autoForceStop,
                         onCheckedChange = { onUpdateParams(config.copy(autoForceStop = it)) }
@@ -1110,7 +1041,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Báo cáo thông báo khi dừng", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text("Báo cáo khi dừng", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.notifyBeforeStop,
                         onCheckedChange = { onUpdateParams(config.copy(notifyBeforeStop = it)) }
@@ -1122,74 +1053,71 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Ẩn app hệ thống (Chỉ app cài)", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text("Bỏ qua app hệ thống", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.excludeSystemApps,
                         onCheckedChange = { onUpdateParams(config.copy(excludeSystemApps = it)) }
                     )
                 }
 
-                // D. Radio chọn Chế độ (Chỉ dừng app vs Đóng băng tái phạm)
-                Text(
-                    text = "Chế độ xử lý:",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-                )
-
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.fillMaxWidth()
+                // D. Chế độ xử lý Segmented Pill Bar
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.padding(vertical = 4.dp, horizontal = 6.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onUpdateParams(config.copy(enableFreezeMode = false)) }
-                                .padding(vertical = 4.dp)
-                        ) {
-                            RadioButton(
-                                selected = !config.enableFreezeMode,
-                                onClick = { onUpdateParams(config.copy(enableFreezeMode = false)) }
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Chỉ dừng app (Force Stop)", fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
-                        }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onUpdateParams(config.copy(enableFreezeMode = true)) }
-                                .padding(vertical = 4.dp)
-                        ) {
-                            RadioButton(
-                                selected = config.enableFreezeMode,
-                                onClick = { onUpdateParams(config.copy(enableFreezeMode = true)) }
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Đóng băng tái phạm (Freeze)", fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
+                    Text(
+                        text = "Chế độ:",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+                    )
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .padding(2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        listOf(
+                            false to "🛑 Buộc dừng",
+                            true to "🧊 Đóng băng"
+                        ).forEach { (isFreeze, label) ->
+                            val isSelected = config.enableFreezeMode == isFreeze
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                modifier = Modifier.clickable { onUpdateParams(config.copy(enableFreezeMode = isFreeze)) }
+                            ) {
+                                Text(
+                                    text = label,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
                         }
                     }
                 }
 
-                // E. Nút Rã băng toàn bộ app
-                Button(
-                    onClick = onUnfreezeAllApps,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(38.dp),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.AcUnit,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Rã băng toàn bộ app", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                // E. Nút Rã băng toàn bộ app (Chỉ hiện khi đang ở chế độ Đóng băng)
+                AnimatedVisibility(visible = config.enableFreezeMode) {
+                    Button(
+                        onClick = onUnfreezeAllApps,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(34.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.AcUnit,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Rã băng toàn bộ app", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
