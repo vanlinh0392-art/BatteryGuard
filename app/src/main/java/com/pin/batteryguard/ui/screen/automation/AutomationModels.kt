@@ -16,7 +16,8 @@ enum class AutomationRuleId {
     DAY_NIGHT_RINGER,      // 🔔 Tự động chuyển chuông theo giờ
     OVERNIGHT_CHARGING,    // 🔋 Chế độ bảo vệ pin khi sạc qua đêm
     LOW_BATTERY_SAVER,     // ⚡ Tự động tiết kiệm pin khi pin yếu (< 20%)
-    DEEP_SCREEN_OFF        // 📴 Tối ưu sâu khi tắt màn hình
+    DEEP_SCREEN_OFF,       // 📴 Tối ưu sâu khi tắt màn hình
+    APP_STOP_MANAGEMENT    // 🛑 Dừng ứng dụng hao pin ngầm
 }
 
 /**
@@ -117,6 +118,18 @@ data class DeepScreenOffParams(
     val turnOffHotspotIfIdle: Boolean = true,
     val restoreBrightnessOnScreenOn: Boolean = true,
     val screenOnBrightnessIncreasePercent: Int = 10
+) : AutomationConfigParams
+
+/**
+ * 6. Tham số Quản lý dừng ứng dụng hao pin ngầm
+ */
+data class AppStopManagementParams(
+    val drainThresholdPercent: Float = 1.0f,
+    val monitoringPeriodMinutes: Int = 15,
+    val autoForceStop: Boolean = true,
+    val enableFreezeMode: Boolean = false,
+    val notifyBeforeStop: Boolean = true,
+    val excludeSystemApps: Boolean = true
 ) : AutomationConfigParams
 
 /**

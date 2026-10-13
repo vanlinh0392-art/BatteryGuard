@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -33,12 +34,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.pin.batteryguard.domain.model.AppBatteryInfo
+import com.pin.batteryguard.util.XiaomiHelper
 import java.util.Locale
 
 @Composable
@@ -50,6 +53,8 @@ fun AppUsageCard(
     onAllowActiveUseStop: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
@@ -58,6 +63,7 @@ fun AppUsageCard(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 2.dp)
+            .clickable { XiaomiHelper.openAppPermissionEditor(context, appInfo.packageName) }
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)

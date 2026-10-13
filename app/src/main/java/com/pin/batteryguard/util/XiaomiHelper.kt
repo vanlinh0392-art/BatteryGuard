@@ -92,6 +92,52 @@ object XiaomiHelper {
         }
     }
 
+    fun openAppPermissionEditor(context: Context, packageName: String) {
+        if (packageName.isBlank()) return
+        try {
+            // Tầng 1: MIUI PermissionsEditorActivity com.miui.securitycenter
+            val intent = Intent().apply {
+                component = ComponentName(
+                    "com.miui.securitycenter",
+                    "com.miui.permcenter.permissions.PermissionsEditorActivity"
+                )
+                putExtra("extra_pkgname", packageName)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            try {
+                // Tầng 2: miui.intent.action.APP_PERM_EDITOR
+                val intent = Intent("miui.intent.action.APP_PERM_EDITOR").apply {
+                    putExtra("extra_pkgname", packageName)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            } catch (_: Exception) {
+                try {
+                    // Tầng 3: android.intent.action.MANAGE_APP_PERMISSIONS
+                    val intent = Intent("android.intent.action.MANAGE_APP_PERMISSIONS").apply {
+                        putExtra(Intent.EXTRA_PACKAGE_NAME, packageName)
+                        putExtra("android.intent.extra.PACKAGE_NAME", packageName)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                } catch (_: Exception) {
+                    try {
+                        // Tầng 4: fallback Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.fromParts("package", packageName, null)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    } catch (_: Exception) {
+                        // Bọc try-catch an toàn tuyệt đối
+                    }
+                }
+            }
+        }
+    }
+
     fun isIgnoringBatteryOptimizations(context: Context): Boolean {
         val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         return pm.isIgnoringBatteryOptimizations(context.packageName)

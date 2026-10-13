@@ -217,6 +217,9 @@ fun AutomationScreen(
                     },
                     onUpdateParams = { newParams ->
                         viewModel.updateRuleParams(rule.id, newParams)
+                    },
+                    onUnfreezeAllApps = {
+                        viewModel.unfreezeAllApps()
                     }
                 )
             }

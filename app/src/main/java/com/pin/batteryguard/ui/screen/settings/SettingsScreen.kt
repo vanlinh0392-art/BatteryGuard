@@ -28,22 +28,15 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -63,9 +56,6 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pin.batteryguard.shizuku.ShizukuStatus
-import com.pin.batteryguard.domain.model.MonitoringConfig
-import com.pin.batteryguard.ui.theme.BatteryFull
-import com.pin.batteryguard.ui.theme.BatteryLow
 import com.pin.batteryguard.util.XiaomiHelper
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -81,7 +71,6 @@ fun SettingsScreen(
     val scrollState = rememberScrollState()
 
     var showClearDialog by remember { mutableStateOf(false) }
-    var periodMenuExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.xiaomiFixMessage) {
         uiState.xiaomiFixMessage?.let { msg ->
@@ -104,180 +93,8 @@ fun SettingsScreen(
                 .verticalScroll(scrollState)
                 .padding(horizontal = 16.dp)
         ) {
-            // Section 1: Giám sát
-            Text("GIÁM SÁT PIN", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
-            
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Bật giám sát", fontWeight = FontWeight.SemiBold)
-                    Text("Quét khi tắt màn", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                }
-                Switch(
-                    checked = uiState.config.isMonitoringEnabled,
-                    onCheckedChange = { viewModel.updateConfig(uiState.config.copy(isMonitoringEnabled = it)) }
-                )
-            }
-
-            // Slider: Threshold % pin
-            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                Text(
-                    text = String.format("Ngưỡng dừng: %.2f%%/h", uiState.config.drainThresholdPercent),
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = "Dừng app vượt ngưỡng",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-                Slider(
-                    value = uiState.config.drainThresholdPercent,
-                    onValueChange = { 
-                        viewModel.updateConfig(uiState.config.copy(
-                            drainThresholdPercent = it
-                        ))
-                    },
-                    valueRange = MonitoringConfig.MIN_FORCE_STOP_PERCENT_PER_HOUR..MonitoringConfig.MAX_FORCE_STOP_PERCENT_PER_HOUR,
-                    steps = 46
-                )
-                Text(
-                    "Khuyến nghị: 1.0%/h",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
-                )
-            }
-
-            // Dropdown: Period quét (phút)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Chu kỳ quét", fontWeight = FontWeight.SemiBold)
-                    Text("Tần suất quét ngầm", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                }
-                
-                ExposedDropdownMenuBox(
-                    expanded = periodMenuExpanded,
-                    onExpandedChange = { periodMenuExpanded = it }
-                ) {
-                    OutlinedTextField(
-                        value = "${uiState.config.monitoringPeriodMinutes} phút",
-                        onValueChange = {},
-                        readOnly = true,
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = periodMenuExpanded) },
-                        modifier = Modifier.width(130.dp).menuAnchor(),
-                        textStyle = MaterialTheme.typography.bodyMedium
-                    )
-                    ExposedDropdownMenu(
-                        expanded = periodMenuExpanded,
-                        onDismissRequest = { periodMenuExpanded = false }
-                    ) {
-                        listOf(10, 15, 20, 30).forEach { mins ->
-                            DropdownMenuItem(
-                                text = { Text("$mins phút") },
-                                onClick = {
-                                    viewModel.updateConfig(uiState.config.copy(monitoringPeriodMinutes = mins))
-                                    periodMenuExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Toggles
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Tự động dừng app", fontWeight = FontWeight.SemiBold)
-                    Text("Dừng thay vì cảnh báo", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                }
-                Switch(
-                    checked = uiState.config.autoForceStop,
-                    onCheckedChange = { viewModel.updateConfig(uiState.config.copy(autoForceStop = it)) }
-                )
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Hiện thông báo", fontWeight = FontWeight.SemiBold)
-                    Text("Báo cáo khi dừng", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                }
-                Switch(
-                    checked = uiState.config.notifyBeforeStop,
-                    onCheckedChange = { viewModel.updateConfig(uiState.config.copy(notifyBeforeStop = it)) }
-                )
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Ẩn app hệ thống", fontWeight = FontWeight.SemiBold)
-                    Text(
-                        "Chỉ hiện app cài",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                }
-                Switch(
-                    checked = uiState.config.excludeSystemApps,
-                    onCheckedChange = {
-                        viewModel.updateConfig(uiState.config.copy(excludeSystemApps = it))
-                    }
-                )
-            }
-
-            // Section 2: Chế độ xử lý (Force Stop vs Freeze)
-            Spacer(modifier = Modifier.height(12.dp))
-            Text("CHẾ ĐỘ XỬ LÝ", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
-            
-            Column {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().clickable {
-                        viewModel.updateConfig(uiState.config.copy(enableFreezeMode = false))
-                    }.padding(vertical = 6.dp)
-                ) {
-                    RadioButton(
-                        selected = !uiState.config.enableFreezeMode,
-                        onClick = { viewModel.updateConfig(uiState.config.copy(enableFreezeMode = false)) }
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column {
-                        Text("Chỉ dừng app", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                        Text("Không đóng băng ngầm", fontSize = 11.sp, color = Color.Gray)
-                    }
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().clickable {
-                        viewModel.updateConfig(uiState.config.copy(enableFreezeMode = true))
-                    }.padding(vertical = 6.dp)
-                ) {
-                    RadioButton(
-                        selected = uiState.config.enableFreezeMode,
-                        onClick = { viewModel.updateConfig(uiState.config.copy(enableFreezeMode = true)) }
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column {
-                        Text("Đóng băng tái phạm", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                        Text("Đóng băng khi lặp", fontSize = 11.sp, color = Color.Gray)
-                    }
-                }
-            }
-
             // Section: CÔNG CỤ HỆ THỐNG
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text("CÔNG CỤ HỆ THỐNG", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
 
             Card(
@@ -484,18 +301,6 @@ fun SettingsScreen(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = {
-                    viewModel.clearFrozenApps()
-                    android.widget.Toast.makeText(context, "Đã rã băng tất cả!", android.widget.Toast.LENGTH_SHORT).show()
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                shape = RoundedCornerShape(10.dp),
-                modifier = Modifier.fillMaxWidth().height(38.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-            ) {
-                Text("Rã băng toàn bộ app", fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-            }
 
             // Reset Setup button (để debug/chạy lại setup wizard)
             TextButton(

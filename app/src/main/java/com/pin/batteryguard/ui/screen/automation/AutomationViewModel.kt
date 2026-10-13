@@ -7,6 +7,7 @@ import android.os.BatteryManager
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.BatterySaver
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.ScreenLockPortrait
 import androidx.compose.material.icons.filled.Wifi
@@ -17,15 +18,22 @@ import com.pin.batteryguard.automation.AutomationDataStore
 import com.pin.batteryguard.automation.AutomationMasterConfig
 import com.pin.batteryguard.automation.SimHelper
 import com.pin.batteryguard.automation.SystemActionBridge
+import com.pin.batteryguard.data.db.dao.FrozenAppDao
+import com.pin.batteryguard.data.preferences.SettingsDataStore
+import com.pin.batteryguard.domain.model.MonitoringConfig
+import com.pin.batteryguard.shizuku.ForceStopManager
 import com.pin.batteryguard.shizuku.ShizukuManager
 import com.pin.batteryguard.shizuku.ShizukuStatus
+import com.pin.batteryguard.util.PackageHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -35,7 +43,10 @@ class AutomationViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val automationDataStore: AutomationDataStore,
     private val automationCoordinator: AutomationCoordinator,
-    private val shizukuManager: ShizukuManager
+    private val shizukuManager: ShizukuManager,
+    private val settingsDataStore: SettingsDataStore,
+    private val forceStopManager: ForceStopManager,
+    private val frozenAppDao: FrozenAppDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AutomationUiState())
@@ -106,11 +117,17 @@ class AutomationViewModel @Inject constructor(
             combine(
                 automationDataStore.configFlow,
                 automationCoordinator.ruleStates,
-                automationCoordinator.isWifiConnected
-            ) { config, runtimeStates, isWifi ->
-                Triple(config, runtimeStates, isWifi)
-            }.collectLatest { (config, runtimeStates, isWifi) ->
-                updateUiWithConfigAndRuntime(config, runtimeStates, isWifi)
+                automationCoordinator.isWifiConnected,
+                settingsDataStore.configFlow
+            ) { config, runtimeStates, isWifi, monitoringConfig ->
+                AutomationCombinedState(config, runtimeStates, isWifi, monitoringConfig)
+            }.collectLatest { state ->
+                updateUiWithConfigAndRuntime(
+                    config = state.config,
+                    runtimeStates = state.runtimeStates,
+                    isWifi = state.isWifi,
+                    monitoringConfig = state.monitoringConfig
+                )
             }
         }
     }
@@ -118,7 +135,8 @@ class AutomationViewModel @Inject constructor(
     private fun updateUiWithConfigAndRuntime(
         config: AutomationMasterConfig,
         runtimeStates: Map<AutomationRuleId, com.pin.batteryguard.automation.RuleRuntimeState>,
-        isWifi: Boolean
+        isWifi: Boolean,
+        monitoringConfig: MonitoringConfig
     ) {
         val rules = listOf(
             AutomationRuleUiModel(
@@ -203,6 +221,27 @@ class AutomationViewModel @Inject constructor(
                 statusDetail = if (!config.isMasterEnabled || !config.deepScreenOffEnabled) "Đã tắt"
                 else runtimeStates[AutomationRuleId.DEEP_SCREEN_OFF]?.detailText ?: "Kích hoạt sau ${config.deepScreenOffParams.delayMinutes}p",
                 params = config.deepScreenOffParams
+            ),
+            AutomationRuleUiModel(
+                id = AutomationRuleId.APP_STOP_MANAGEMENT,
+                title = "Dừng app tốn pin",
+                subtitle = if (monitoringConfig.enableFreezeMode) "Đóng băng app hao pin" else "Buộc dừng app hao pin",
+                icon = Icons.Filled.Block,
+                isEnabled = monitoringConfig.isMonitoringEnabled,
+                activeStatus = if (!config.isMasterEnabled || !monitoringConfig.isMonitoringEnabled) RuleActiveStatus.DISABLED
+                else runtimeStates[AutomationRuleId.APP_STOP_MANAGEMENT]?.status ?: RuleActiveStatus.IDLE,
+                statusBadgeText = if (!config.isMasterEnabled || !monitoringConfig.isMonitoringEnabled) "Đã tắt"
+                else runtimeStates[AutomationRuleId.APP_STOP_MANAGEMENT]?.badgeText ?: "Sẵn sàng",
+                statusDetail = if (!config.isMasterEnabled || !monitoringConfig.isMonitoringEnabled) "Đã tắt"
+                else runtimeStates[AutomationRuleId.APP_STOP_MANAGEMENT]?.detailText ?: "Ngưỡng: ≥ ${monitoringConfig.drainThresholdPercent}%/h • Chu kỳ ${monitoringConfig.monitoringPeriodMinutes}p",
+                params = AppStopManagementParams(
+                    drainThresholdPercent = monitoringConfig.drainThresholdPercent,
+                    monitoringPeriodMinutes = monitoringConfig.monitoringPeriodMinutes,
+                    autoForceStop = monitoringConfig.autoForceStop,
+                    enableFreezeMode = monitoringConfig.enableFreezeMode,
+                    notifyBeforeStop = monitoringConfig.notifyBeforeStop,
+                    excludeSystemApps = monitoringConfig.excludeSystemApps
+                )
             )
         )
 
@@ -280,7 +319,11 @@ class AutomationViewModel @Inject constructor(
      */
     fun toggleRule(ruleId: AutomationRuleId, enabled: Boolean) {
         viewModelScope.launch {
-            automationDataStore.setRuleEnabled(ruleId, enabled)
+            if (ruleId == AutomationRuleId.APP_STOP_MANAGEMENT) {
+                settingsDataStore.setMonitoringEnabled(enabled)
+            } else {
+                automationDataStore.setRuleEnabled(ruleId, enabled)
+            }
             _uiState.update {
                 it.copy(snackbarMessage = "Đã ${if (enabled) "bật" else "tắt"} module tự động")
             }
@@ -330,8 +373,61 @@ class AutomationViewModel @Inject constructor(
                         automationDataStore.updateDeepScreenOffParams(it)
                     }
                 }
+                AutomationRuleId.APP_STOP_MANAGEMENT -> {
+                    (newParams as? AppStopManagementParams)?.let { params ->
+                        val currentConfig = settingsDataStore.configFlow.first()
+                        settingsDataStore.updateConfig(
+                            currentConfig.copy(
+                                drainThresholdPercent = params.drainThresholdPercent,
+                                monitoringPeriodMinutes = params.monitoringPeriodMinutes,
+                                autoForceStop = params.autoForceStop,
+                                enableFreezeMode = params.enableFreezeMode,
+                                notifyBeforeStop = params.notifyBeforeStop,
+                                excludeSystemApps = params.excludeSystemApps
+                            )
+                        )
+                    }
+                }
             }
             _uiState.update { it.copy(snackbarMessage = "Đã lưu cài đặt mới") }
+        }
+    }
+
+    /**
+     * Rã băng toàn bộ ứng dụng đang bị đóng băng (Deep Sleep / Freeze)
+     */
+    fun unfreezeAllApps() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val dbPackages = try {
+                frozenAppDao.getAll().map { it.packageName }
+            } catch (_: Exception) {
+                emptyList()
+            }
+            val osFrozen = try {
+                forceStopManager.listFrozenPackages(0)
+            } catch (_: Exception) {
+                emptySet()
+            }
+            val allPackages = (dbPackages + osFrozen).distinct().filterNot {
+                try {
+                    PackageHelper.isSystemApp(context, it)
+                } catch (_: Exception) {
+                    false
+                }
+            }
+
+            if (allPackages.isNotEmpty()) {
+                forceStopManager.batchUnfreeze(allPackages, 0)
+            }
+            try {
+                frozenAppDao.deleteAll()
+            } catch (_: Exception) { }
+            forceStopManager.invalidateFrozenCache()
+
+            val count = allPackages.size
+            _uiState.update {
+                it.copy(snackbarMessage = if (count > 0) "Đã rã băng $count ứng dụng thành công" else "Không có ứng dụng nào đang bị đóng băng")
+            }
         }
     }
 
@@ -356,3 +452,10 @@ class AutomationViewModel @Inject constructor(
         _uiState.update { it.copy(snackbarMessage = null) }
     }
 }
+
+private data class AutomationCombinedState(
+    val config: AutomationMasterConfig,
+    val runtimeStates: Map<AutomationRuleId, com.pin.batteryguard.automation.RuleRuntimeState>,
+    val isWifi: Boolean,
+    val monitoringConfig: MonitoringConfig
+)

@@ -181,6 +181,9 @@ class AutomationDataStore @Inject constructor(
                     prefs[KEY_LOW_BATTERY_ENABLED] = enabled
                 com.pin.batteryguard.ui.screen.automation.AutomationRuleId.DEEP_SCREEN_OFF ->
                     prefs[KEY_SCREEN_OFF_ENABLED] = enabled
+                com.pin.batteryguard.ui.screen.automation.AutomationRuleId.APP_STOP_MANAGEMENT -> {
+                    // Trạng thái bật/tắt dừng app được đồng bộ qua SettingsDataStore.isMonitoringEnabled
+                }
             }
         }
     }

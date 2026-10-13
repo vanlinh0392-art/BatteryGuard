@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,20 +31,28 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
@@ -72,6 +81,7 @@ import com.pin.batteryguard.ui.theme.Green40
 import com.pin.batteryguard.ui.theme.Green80
 import com.pin.batteryguard.ui.theme.Teal40
 import com.pin.batteryguard.ui.theme.Teal80
+import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
@@ -85,6 +95,7 @@ fun AutomationCard(
     onToggle: (Boolean) -> Unit,
     onToggleExpand: () -> Unit,
     onUpdateParams: (AutomationConfigParams) -> Unit,
+    onUnfreezeAllApps: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isEffectivelyEnabled = isMasterEnabled && rule.isEnabled
@@ -269,7 +280,8 @@ fun AutomationCard(
                     AutomationConfigEditor(
                         ruleId = rule.id,
                         params = rule.params,
-                        onUpdateParams = onUpdateParams
+                        onUpdateParams = onUpdateParams,
+                        onUnfreezeAllApps = onUnfreezeAllApps
                     )
                 }
             }
@@ -343,12 +355,13 @@ fun AutomationStatusBadge(
 /**
  * Bộ biên tập tham số cấu hình riêng biệt cho từng loại quy tắc
  */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun AutomationConfigEditor(
     ruleId: AutomationRuleId,
     params: AutomationConfigParams,
-    onUpdateParams: (AutomationConfigParams) -> Unit
+    onUpdateParams: (AutomationConfigParams) -> Unit,
+    onUnfreezeAllApps: () -> Unit = {}
 ) {
     when (ruleId) {
         // 1. 📶 Tự động tắt 4G khi có Wi-Fi
@@ -1040,6 +1053,243 @@ fun AutomationConfigEditor(
                             }
                         }
                     }
+                }
+            }
+        }
+
+        // 6. 🛑 Dừng & Đóng băng ứng dụng hao pin ngầm
+        AutomationRuleId.APP_STOP_MANAGEMENT -> {
+            val config = params as? AppStopManagementParams ?: AppStopManagementParams()
+            var periodMenuExpanded by remember { mutableStateOf(false) }
+
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                // A. Slider ngưỡng pin tiêu thụ (%/h)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Ngưỡng tiêu thụ pin:",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+                        )
+                        Text(
+                            text = "Tự động xử lý app vượt quá mức tiêu thụ này",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text(
+                        text = String.format(Locale.US, "%.1f%%/h", config.drainThresholdPercent),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+
+                Slider(
+                    value = config.drainThresholdPercent,
+                    onValueChange = {
+                        onUpdateParams(config.copy(drainThresholdPercent = (it * 10).roundToInt() / 10f))
+                    },
+                    valueRange = 0.3f..5.0f,
+                    steps = 46,
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary
+                    )
+                )
+
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(0.5f to "0.5%/h", 1.0f to "1.0%/h (Chuẩn)", 1.5f to "1.5%/h", 2.0f to "2.0%/h").forEach { (th, label) ->
+                        FilterChip(
+                            selected = (config.drainThresholdPercent - th).let { it >= -0.05f && it <= 0.05f },
+                            onClick = { onUpdateParams(config.copy(drainThresholdPercent = th)) },
+                            label = { Text(label, fontSize = 11.5.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
+                }
+
+                // B. Dropdown chu kỳ quét
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Chu kỳ quét pin:",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+                        )
+                        Text(
+                            text = "Tần suất đánh giá và quét app ngầm",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    ExposedDropdownMenuBox(
+                        expanded = periodMenuExpanded,
+                        onExpandedChange = { periodMenuExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = "${config.monitoringPeriodMinutes} phút",
+                            onValueChange = {},
+                            readOnly = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = periodMenuExpanded) },
+                            modifier = Modifier
+                                .width(135.dp)
+                                .menuAnchor(),
+                            textStyle = MaterialTheme.typography.bodyMedium
+                        )
+                        ExposedDropdownMenu(
+                            expanded = periodMenuExpanded,
+                            onDismissRequest = { periodMenuExpanded = false }
+                        ) {
+                            listOf(10, 15, 20, 30).forEach { mins ->
+                                DropdownMenuItem(
+                                    text = { Text("$mins phút") },
+                                    onClick = {
+                                        onUpdateParams(config.copy(monitoringPeriodMinutes = mins))
+                                        periodMenuExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // C. Switches
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Tự động dừng app ngầm", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Dừng thay vì cảnh báo",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = config.autoForceStop,
+                        onCheckedChange = { onUpdateParams(config.copy(autoForceStop = it)) }
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Báo cáo thông báo", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Hiện thông báo khi dừng app",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = config.notifyBeforeStop,
+                        onCheckedChange = { onUpdateParams(config.copy(notifyBeforeStop = it)) }
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Ẩn app hệ thống", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Chỉ quét và xử lý ứng dụng người dùng cài",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = config.excludeSystemApps,
+                        onCheckedChange = { onUpdateParams(config.copy(excludeSystemApps = it)) }
+                    )
+                }
+
+                // D. Radio chọn Chế độ (Chỉ dừng app vs Đóng băng tái phạm)
+                Text(
+                    text = "Chế độ xử lý:",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+                )
+
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(vertical = 4.dp, horizontal = 6.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onUpdateParams(config.copy(enableFreezeMode = false)) }
+                                .padding(vertical = 6.dp)
+                        ) {
+                            RadioButton(
+                                selected = !config.enableFreezeMode,
+                                onClick = { onUpdateParams(config.copy(enableFreezeMode = false)) }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text("Chỉ dừng app (Force Stop)", fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
+                                Text("Không đóng băng ngầm", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onUpdateParams(config.copy(enableFreezeMode = true)) }
+                                .padding(vertical = 6.dp)
+                        ) {
+                            RadioButton(
+                                selected = config.enableFreezeMode,
+                                onClick = { onUpdateParams(config.copy(enableFreezeMode = true)) }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text("Đóng băng tái phạm (Freeze)", fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
+                                Text("Đóng băng khi app tiếp tục tự khởi chạy", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+
+                // E. Nút Rã băng toàn bộ app
+                Button(
+                    onClick = onUnfreezeAllApps,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(40.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.AcUnit,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Rã băng toàn bộ app", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
