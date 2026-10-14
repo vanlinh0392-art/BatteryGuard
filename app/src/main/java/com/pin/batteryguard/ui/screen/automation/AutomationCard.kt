@@ -1163,6 +1163,25 @@ fun AutomationConfigEditor(
                     )
                 }
 
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Đóng băng theo dõi Xiaomi (7 dịch vụ)", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Chặn Analytics, Daemon, OneTrack, SystemAds ngốn pin ngầm",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = config.freezeXiaomiTelemetry,
+                        onCheckedChange = { onUpdateParams(config.copy(freezeXiaomiTelemetry = it)) }
+                    )
+                }
+
                 // D. Chế độ xử lý Segmented Pill Bar
                 Row(
                     modifier = Modifier.fillMaxWidth(),

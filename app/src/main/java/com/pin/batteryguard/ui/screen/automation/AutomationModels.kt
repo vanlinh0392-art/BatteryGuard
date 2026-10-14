@@ -134,7 +134,8 @@ data class AppStopManagementParams(
     val enableFreezeMode: Boolean = false,
     val notifyBeforeStop: Boolean = true,
     val excludeSystemApps: Boolean = true,
-    val smartAutoFreeze: Boolean = true
+    val smartAutoFreeze: Boolean = true,
+    val freezeXiaomiTelemetry: Boolean = false
 ) : AutomationConfigParams
 
 /**

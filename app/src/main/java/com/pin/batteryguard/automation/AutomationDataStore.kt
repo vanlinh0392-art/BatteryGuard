@@ -101,6 +101,7 @@ class AutomationDataStore @Inject constructor(
 
         // 6. App Stop Management
         val KEY_APP_STOP_SMART_FREEZE = booleanPreferencesKey("app_stop_smart_freeze")
+        val KEY_APP_STOP_FREEZE_XIAOMI_TELEMETRY = booleanPreferencesKey("app_stop_freeze_xiaomi_telemetry")
     }
 
     val configFlow: Flow<AutomationMasterConfig> = context.automationDataStore.data.map { prefs ->
@@ -170,7 +171,8 @@ class AutomationDataStore @Inject constructor(
                 gmsDozeSafeMode = prefs[KEY_SCREEN_OFF_GMS_DOZE] ?: false
             ),
             appStopManagementParams = AppStopManagementParams(
-                smartAutoFreeze = prefs[KEY_APP_STOP_SMART_FREEZE] ?: true
+                smartAutoFreeze = prefs[KEY_APP_STOP_SMART_FREEZE] ?: true,
+                freezeXiaomiTelemetry = prefs[KEY_APP_STOP_FREEZE_XIAOMI_TELEMETRY] ?: false
             ),
             autoSortActiveToTop = prefs[KEY_AUTO_SORT_ACTIVE] ?: true
         )
@@ -265,6 +267,7 @@ class AutomationDataStore @Inject constructor(
     suspend fun updateAppStopManagementParams(params: AppStopManagementParams) {
         context.automationDataStore.edit { prefs ->
             prefs[KEY_APP_STOP_SMART_FREEZE] = params.smartAutoFreeze
+            prefs[KEY_APP_STOP_FREEZE_XIAOMI_TELEMETRY] = params.freezeXiaomiTelemetry
         }
     }
 }

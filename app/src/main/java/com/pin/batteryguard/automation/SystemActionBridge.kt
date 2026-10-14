@@ -800,4 +800,60 @@ object SystemActionBridge {
             false
         }
     }
+
+    /**
+     * Danh sách 7 dịch vụ theo dõi, đo lường & quảng cáo nền của Xiaomi được kiểm chứng an toàn 100% (UAD-ng)
+     */
+    val XIAOMI_SAFE_TELEMETRY_PACKAGES = listOf(
+        "com.miui.analytics",
+        "com.miui.daemon",
+        "com.miui.systemAdSolution",
+        "com.miui.bugreport",
+        "com.miui.hybrid",
+        "com.xiaomi.security.onetrack",
+        "com.miui.yellowpage"
+    )
+
+    /**
+     * Đóng băng hoặc khôi phục an toàn 7 dịch vụ theo dõi Xiaomi:
+     * Sử dụng phòng ngự 5 tầng:
+     * - Khi frozen = true:
+     *   1. pm disable-user --user 0 (thử nếu OEM cho phép)
+     *   2. am force-stop
+     *   3. am set-standby-bucket restricted (Level 5)
+     *   4. cmd appops set RUN_IN_BACKGROUND ignore
+     *   5. cmd appops set WAKE_LOCK ignore
+     *   6. dumpsys deviceidle whitelist remove
+     * - Khi frozen = false:
+     *   1. pm enable
+     *   2. am set-standby-bucket active
+     *   3. cmd appops set RUN_IN_BACKGROUND allow
+     *   4. cmd appops set WAKE_LOCK allow
+     */
+    suspend fun setXiaomiTelemetryFrozen(frozen: Boolean): Int = withContext(Dispatchers.IO) {
+        var count = 0
+        for (pkg in XIAOMI_SAFE_TELEMETRY_PACKAGES) {
+            try {
+                if (frozen) {
+                    executeShizukuCommandWithTimeout(arrayOf("pm", "disable-user", "--user", "0", pkg), 1500L)
+                    executeShizukuCommandWithTimeout(arrayOf("am", "force-stop", pkg), 1500L)
+                    executeShizukuCommandWithTimeout(arrayOf("am", "set-standby-bucket", pkg, "restricted"), 1500L)
+                    executeShizukuCommandWithTimeout(arrayOf("cmd", "appops", "set", pkg, "RUN_IN_BACKGROUND", "ignore"), 1500L)
+                    executeShizukuCommandWithTimeout(arrayOf("cmd", "appops", "set", pkg, "WAKE_LOCK", "ignore"), 1500L)
+                    executeShizukuCommandWithTimeout(arrayOf("dumpsys", "deviceidle", "whitelist", "-$pkg"), 1500L)
+                    count++
+                } else {
+                    executeShizukuCommandWithTimeout(arrayOf("pm", "enable", pkg), 1500L)
+                    executeShizukuCommandWithTimeout(arrayOf("am", "set-standby-bucket", pkg, "active"), 1500L)
+                    executeShizukuCommandWithTimeout(arrayOf("cmd", "appops", "set", pkg, "RUN_IN_BACKGROUND", "allow"), 1500L)
+                    executeShizukuCommandWithTimeout(arrayOf("cmd", "appops", "set", pkg, "WAKE_LOCK", "allow"), 1500L)
+                    count++
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Lỗi setXiaomiTelemetryFrozen($pkg, frozen=$frozen): ${e.message}")
+            }
+        }
+        Log.i(TAG, "🔒 [XiaomiTelemetry] frozen=$frozen -> Đã áp dụng cho $count/7 gói dịch vụ")
+        count
+    }
 }

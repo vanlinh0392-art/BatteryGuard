@@ -240,6 +240,15 @@ class AutomationCoordinator @Inject constructor(
         if (!new.deepScreenOffEnabled) {
             updateRuleState(AutomationRuleId.DEEP_SCREEN_OFF, RuleActiveStatus.DISABLED, "Đã tắt")
         }
+        val oldFreezeTelemetry = old.appStopManagementParams.freezeXiaomiTelemetry
+        val newFreezeTelemetry = new.appStopManagementParams.freezeXiaomiTelemetry
+        if (oldFreezeTelemetry != newFreezeTelemetry) {
+            scope?.launch(Dispatchers.IO) {
+                val count = SystemActionBridge.setXiaomiTelemetryFrozen(newFreezeTelemetry)
+                Log.i(TAG, "🔒 [Telemetry] Cập nhật đóng băng telemetry Xiaomi: $newFreezeTelemetry ($count packages)")
+            }
+        }
+
         if (new.appStopManagementParams.smartAutoFreeze) {
             updateRuleState(
                 AutomationRuleId.APP_STOP_MANAGEMENT,

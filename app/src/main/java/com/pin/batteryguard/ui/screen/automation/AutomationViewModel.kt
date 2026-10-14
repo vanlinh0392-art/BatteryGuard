@@ -241,7 +241,8 @@ class AutomationViewModel @Inject constructor(
                     enableFreezeMode = monitoringConfig.enableFreezeMode,
                     notifyBeforeStop = monitoringConfig.notifyBeforeStop,
                     excludeSystemApps = monitoringConfig.excludeSystemApps,
-                    smartAutoFreeze = config.appStopManagementParams.smartAutoFreeze
+                    smartAutoFreeze = config.appStopManagementParams.smartAutoFreeze,
+                    freezeXiaomiTelemetry = config.appStopManagementParams.freezeXiaomiTelemetry
                 )
             )
         )
