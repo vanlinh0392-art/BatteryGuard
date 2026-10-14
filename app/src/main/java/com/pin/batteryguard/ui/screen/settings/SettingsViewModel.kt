@@ -206,4 +206,17 @@ class SettingsViewModel @Inject constructor(
     fun clearXiaomiFixMessage() {
         _uiState.update { it.copy(xiaomiFixMessage = null) }
     }
+
+    fun openFcmDiagnostics() {
+        val success = XiaomiHelper.openFcmDiagnostics(context)
+        if (!success) {
+            _uiState.update { it.copy(xiaomiFixMessage = "Không mở được chẩn đoán FCM (GcmDiagnostics) trên thiết bị này.") }
+        }
+    }
+
+    fun reconnectFcm() {
+        val success = XiaomiHelper.kickFcmHeartbeat(context)
+        val msg = if (success) "⚡ Đã kích hoạt tái kết nối FCM / MCS Heartbeat tức thì!" else "Không thể gửi tín hiệu tái kết nối FCM."
+        _uiState.update { it.copy(xiaomiFixMessage = msg) }
+    }
 }

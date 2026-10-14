@@ -56,8 +56,9 @@ class XiaomiNotificationFixManager @Inject constructor(
     fun isChatOrBankApp(packageName: String, appName: String = ""): Boolean {
         val lowerPkg = packageName.lowercase(Locale.ROOT)
         val lowerName = appName.lowercase(Locale.ROOT)
-        return CHAT_KEYWORDS.any { lowerPkg.contains(it) || lowerName.contains(it) } ||
+        val matchesKeyword = CHAT_KEYWORDS.any { lowerPkg.contains(it) || lowerName.contains(it) } ||
                 BANKING_KEYWORDS.any { lowerPkg.contains(it) || lowerName.contains(it) }
+        return matchesKeyword || XiaomiHelper.isFcmApp(context, packageName)
     }
 
     suspend fun hasSnapshot(packageName: String): Boolean = withContext(Dispatchers.IO) {
@@ -195,7 +196,14 @@ class XiaomiNotificationFixManager @Inject constructor(
                 return@withContext Result.failure(Exception("Lỗi thực thi lệnh Shizuku (Mã lỗi ${execResult.exitCode}): ${execResult.stderr.ifBlank { execResult.stdout }}"))
             }
 
-            // Bước 3: Đồng bộ vào ExceptionApp của BatteryGuard để không bị kill ngầm
+            // Bước 3: Tầng 8 - Đưa cả ứng dụng VÀ com.google.android.gms vào MILLET_NO_RESTRICT_APP
+            XiaomiHelper.setMilletWhitelist(context, packageName, true)
+            XiaomiHelper.ensureGmsInMillet(context)
+
+            // Bước 4: Tầng 9 - Đánh thức socket kết nối FCM (Heartbeat kick) ngay lập tức
+            XiaomiHelper.kickFcmHeartbeat(context)
+
+            // Bước 5: Đồng bộ vào ExceptionApp của BatteryGuard để không bị kill ngầm
             exceptionListDao.insert(
                 ExceptionApp(
                     packageName = packageName,
@@ -205,7 +213,7 @@ class XiaomiNotificationFixManager @Inject constructor(
                 )
             )
 
-            Result.success("Đã tối ưu thông báo & tự khởi chạy cho $appName thành công!")
+            Result.success("Đã tối ưu thông báo 9 tầng & tự khởi chạy cho $appName thành công!")
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -251,6 +259,9 @@ class XiaomiNotificationFixManager @Inject constructor(
             if (!execResult.isSuccess) {
                 return@withContext Result.failure(Exception("Lỗi khôi phục: ${execResult.stderr}"))
             }
+
+            // Gỡ khỏi Millet whitelist của app (vẫn bảo toàn com.google.android.gms)
+            XiaomiHelper.setMilletWhitelist(context, packageName, false)
 
             // Xóa snapshot và gỡ khỏi ExceptionApp
             snapshotDao.deleteByPackage(packageName)

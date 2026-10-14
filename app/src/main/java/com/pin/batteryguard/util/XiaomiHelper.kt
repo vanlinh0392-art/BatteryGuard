@@ -3,6 +3,7 @@ package com.pin.batteryguard.util
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
@@ -290,6 +291,91 @@ object XiaomiHelper {
             val currentList = Settings.System.getString(cr, "MILLET_NO_RESTRICT_APP") ?: ""
             val newList = modifyMilletWhitelist(currentList, packageName, whitelisted)
             Settings.System.putString(cr, "MILLET_NO_RESTRICT_APP", newList)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Đảm bảo Google Play services (GMS) luôn nằm trong danh sách miễn trừ đóng băng Millet.
+     * Ngăn chặn việc Xiaomi PowerKeeper ngắt socket kết nối FCM (mtalk.google.com:5228).
+     */
+    fun ensureGmsInMillet(context: Context): Boolean {
+        if (!isXiaomi()) return false
+        val gmsPkg = "com.google.android.gms"
+        return if (!isMilletWhitelisted(context, gmsPkg)) {
+            setMilletWhitelist(context, gmsPkg, true)
+        } else {
+            true
+        }
+    }
+
+    /**
+     * Kích hoạt ép kết nối lại socket FCM / MCS Heartbeat ngay lập tức tới GMS và GSF.
+     * Tương tự cơ chế của FcmReconnect trong FCMGuard.
+     */
+    fun kickFcmHeartbeat(context: Context): Boolean {
+        var sent = false
+        val targetPackages = listOf("com.google.android.gms", "com.google.android.gsf")
+        val actions = listOf(
+            "com.google.android.intent.action.GTALK_HEARTBEAT",
+            "com.google.android.intent.action.MCS_HEARTBEAT"
+        )
+        for (pkg in targetPackages) {
+            for (action in actions) {
+                try {
+                    context.sendBroadcast(Intent(action).setPackage(pkg))
+                    sent = true
+                } catch (_: Exception) {}
+            }
+        }
+        return sent
+    }
+
+    /**
+     * Mở giao diện chẩn đoán kết nối FCM ẩn của Google Play services (GcmDiagnostics).
+     */
+    fun openFcmDiagnostics(context: Context): Boolean {
+        val candidates = listOf(
+            ComponentName("com.google.android.gms", "com.google.android.gms.gcm.GcmDiagnostics"),
+            ComponentName("com.google.android.gms", "com.google.android.gms.checkin.CheckinService"),
+            ComponentName("com.google.android.gsf", "com.google.android.gsf.gtalkservice.diagnostics.GTalkServiceDiagnostics")
+        )
+        for (cmp in candidates) {
+            try {
+                val intent = Intent().apply {
+                    component = cmp
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                if (intent.resolveActivity(context.packageManager) != null) {
+                    context.startActivity(intent)
+                    return true
+                }
+            } catch (_: Exception) {}
+        }
+        return false
+    }
+
+    /**
+     * Quét nhanh kiểm tra xem ứng dụng có khai báo thành phần nhận thông báo đẩy FCM / GCM hay không.
+     */
+    fun isFcmApp(context: Context, packageName: String): Boolean {
+        return try {
+            val pm = context.packageManager
+            val flags = PackageManager.GET_SERVICES or PackageManager.GET_RECEIVERS
+            val pkgInfo = pm.getPackageInfo(packageName, flags)
+
+            val hasFcmService = pkgInfo.services?.any { service ->
+                service.name.contains("firebase", ignoreCase = true) ||
+                service.name.contains("fcm", ignoreCase = true)
+            } ?: false
+
+            val hasFcmReceiver = pkgInfo.receivers?.any { receiver ->
+                receiver.name.contains("c2dm", ignoreCase = true) ||
+                receiver.name.contains("fcm", ignoreCase = true)
+            } ?: false
+
+            hasFcmService || hasFcmReceiver
         } catch (_: Exception) {
             false
         }

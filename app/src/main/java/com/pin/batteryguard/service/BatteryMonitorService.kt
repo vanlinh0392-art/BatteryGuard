@@ -248,6 +248,12 @@ class BatteryMonitorService : LifecycleService() {
                 pauseMonitoring("screen_on_or_charging")
                 return@withContext
             }
+
+            // Tự động bảo vệ Millet cho Xiaomi: Giữ com.google.android.gms luôn không bị đóng băng socket
+            if (com.pin.batteryguard.util.XiaomiHelper.isXiaomi()) {
+                com.pin.batteryguard.util.XiaomiHelper.ensureGmsInMillet(this@BatteryMonitorService)
+            }
+
             if (isCpuThrottled) {
                 coolDownDevice()
                 scheduleNextScan(CONFIRMATION_MINUTES)

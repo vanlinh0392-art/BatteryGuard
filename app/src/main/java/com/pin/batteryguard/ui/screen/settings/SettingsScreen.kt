@@ -265,6 +265,34 @@ fun SettingsScreen(
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = { viewModel.openFcmDiagnostics() },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f).height(38.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        Icon(Icons.Filled.Tune, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Chẩn đoán FCM", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = { viewModel.reconnectFcm() },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f).height(38.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        Icon(Icons.Filled.Bolt, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Đánh thức FCM", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    }
+                }
             }
 
             // Section 5: Dữ liệu
