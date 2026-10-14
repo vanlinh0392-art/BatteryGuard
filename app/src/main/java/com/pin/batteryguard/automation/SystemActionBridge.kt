@@ -681,7 +681,7 @@ object SystemActionBridge {
     /**
      * Kích hoạt Instant Deep Doze (sau 3s tắt màn hình):
      * Cấu hình inactive_to=3000ms, idle_after_inactive_to=0ms,
-     * chạy step light và force-idle deep.
+     * chạy force-inactive, step light và force-idle deep (kèm fail-safe retry).
      */
     suspend fun triggerInstantDeepDoze(context: Context? = null): Boolean = withContext(Dispatchers.IO) {
         try {
@@ -701,15 +701,26 @@ object SystemActionBridge {
                     "inactive_to=3000,idle_after_inactive_to=0"),
                 2000L
             )
+            val rInactive = executeShizukuCommandWithTimeout(
+                arrayOf("dumpsys", "deviceidle", "force-inactive"),
+                2000L
+            )
             val rLight = executeShizukuCommandWithTimeout(
                 arrayOf("dumpsys", "deviceidle", "step", "light"),
                 2000L
             )
-            val rDeep = executeShizukuCommandWithTimeout(
+            var rDeep = executeShizukuCommandWithTimeout(
                 arrayOf("dumpsys", "deviceidle", "force-idle", "deep"),
                 2000L
             )
-            Log.d(TAG, "⚡ [InstantDeepDoze] step light: ${rLight.stdout.trim()}, force-idle deep: ${rDeep.stdout.trim()}")
+            if (rDeep.stdout.contains("stopped at INACTIVE", ignoreCase = true)) {
+                Log.d(TAG, "⚡ [InstantDeepDoze] Phát hiện 'stopped at INACTIVE', chạy lại force-idle deep...")
+                rDeep = executeShizukuCommandWithTimeout(
+                    arrayOf("dumpsys", "deviceidle", "force-idle", "deep"),
+                    2000L
+                )
+            }
+            Log.d(TAG, "⚡ [InstantDeepDoze] force-inactive: ${rInactive.stdout.trim()}, step light: ${rLight.stdout.trim()}, force-idle deep: ${rDeep.stdout.trim()}")
             true
         } catch (e: Exception) {
             Log.e(TAG, "❌ [InstantDeepDoze] Lỗi triggerInstantDeepDoze: ${e.message}")
