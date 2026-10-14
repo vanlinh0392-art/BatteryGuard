@@ -197,7 +197,7 @@ class AutomationViewModel @Inject constructor(
             AutomationRuleUiModel(
                 id = AutomationRuleId.LOW_BATTERY_SAVER,
                 title = "Tiết kiệm pin yếu",
-                subtitle = "Bật tiết kiệm & 60Hz",
+                subtitle = if (config.lowBatterySaverParams.smoothSaver120Hz) "Bật tiết kiệm & 120Hz" else "Bật tiết kiệm & 60Hz",
                 icon = Icons.Filled.BatterySaver,
                 isEnabled = config.lowBatterySaverEnabled,
                 activeStatus = if (!config.isMasterEnabled || !config.lowBatterySaverEnabled) RuleActiveStatus.DISABLED
@@ -240,7 +240,8 @@ class AutomationViewModel @Inject constructor(
                     autoForceStop = monitoringConfig.autoForceStop,
                     enableFreezeMode = monitoringConfig.enableFreezeMode,
                     notifyBeforeStop = monitoringConfig.notifyBeforeStop,
-                    excludeSystemApps = monitoringConfig.excludeSystemApps
+                    excludeSystemApps = monitoringConfig.excludeSystemApps,
+                    smartAutoFreeze = config.appStopManagementParams.smartAutoFreeze
                 )
             )
         )
@@ -375,6 +376,7 @@ class AutomationViewModel @Inject constructor(
                 }
                 AutomationRuleId.APP_STOP_MANAGEMENT -> {
                     (newParams as? AppStopManagementParams)?.let { params ->
+                        automationDataStore.updateAppStopManagementParams(params)
                         val currentConfig = settingsDataStore.configFlow.first()
                         settingsDataStore.updateConfig(
                             currentConfig.copy(

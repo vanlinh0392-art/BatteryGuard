@@ -564,6 +564,79 @@ object SystemActionBridge {
     }
 
     /**
+     * Chế độ SmoothSaver: Duy trì 120Hz mượt mà khi bật Tiết kiệm pin (thay vì bị khóa về 60Hz).
+     * Khi enable = true: ép 120.0Hz min/peak/user và miui_refresh_rate.
+     * Khi enable = false: khôi phục 120Hz peak, 1Hz min (LTPO dynamic).
+     */
+    suspend fun setSmoothSaverMode(context: Context, enable: Boolean) {
+        if (!enable) {
+            restoreDisplayRefreshRate(context)
+            return
+        }
+
+        tryDirectThenFallback(
+            actionName = "SmoothSaver_120Hz",
+            directAction = {
+                if (!hasWriteSecureSettings(context) && !hasWriteSettings(context)) return@tryDirectThenFallback false
+
+                val cr = context.contentResolver
+                val r1 = Settings.System.putFloat(cr, "peak_refresh_rate", 120.0f)
+                val r2 = Settings.System.putFloat(cr, "min_refresh_rate", 120.0f)
+                val r3 = try {
+                    Settings.Secure.putInt(cr, "user_refresh_rate", 120)
+                } catch (_: Exception) {
+                    false
+                }
+                val r4 = try {
+                    Settings.Secure.putInt(cr, "miui_refresh_rate", 120) ||
+                    Settings.System.putInt(cr, "miui_refresh_rate", 120)
+                } catch (_: Exception) {
+                    false
+                }
+                r1 || r2 || r3 || r4
+            },
+            fallbackAction = {
+                executeShizukuCommandWithTimeout(arrayOf("settings", "put", "system", "min_refresh_rate", "120.0"), 2000L)
+                executeShizukuCommandWithTimeout(arrayOf("settings", "put", "system", "peak_refresh_rate", "120.0"), 2000L)
+                executeShizukuCommandWithTimeout(arrayOf("settings", "put", "secure", "user_refresh_rate", "120"), 2000L)
+                executeShizukuCommandWithTimeout(arrayOf("settings", "put", "secure", "miui_refresh_rate", "120"), 2000L)
+                executeShizukuCommandWithTimeout(arrayOf("settings", "put", "system", "miui_refresh_rate", "120"), 2000L)
+            }
+        )
+    }
+
+    /**
+     * Bật / Tắt Đồng bộ hóa tài khoản hệ thống (Master Sync)
+     */
+    suspend fun setMasterSync(enable: Boolean) {
+        val flagStr = enable.toString()
+        tryDirectThenFallback(
+            actionName = "SetMasterSync_$enable",
+            directAction = {
+                ContentResolver.setMasterSyncAutomatically(enable)
+                true
+            },
+            fallbackAction = {
+                executeShizukuCommandWithTimeout(
+                    arrayOf(
+                        "content", "call", "--uri", "content://settings/global",
+                        "--method", "PUT_global", "--arg", "sync_parent_sounds",
+                        "--extra_arg:b:value", flagStr
+                    ),
+                    2000L
+                )
+                executeShizukuCommandWithTimeout(
+                    arrayOf(
+                        "settings", "put", "global", "sync_max_retry_delay_in_seconds",
+                        if (enable) "3600" else "0"
+                    ),
+                    2000L
+                )
+            }
+        )
+    }
+
+    /**
      * 5. 📴 Tối ưu Sâu khi Tắt Màn Hình (Deep Doze)
      */
     suspend fun triggerDeepDoze() {
@@ -602,6 +675,129 @@ object SystemActionBridge {
             Log.d(TAG, "✅ [DeepDoze] Tuned device_idle_constants for faster deep idle")
         } catch (e: Exception) {
             Log.e(TAG, "❌ [DeepDoze] Light idle failed: ${e.message}")
+        }
+    }
+
+    /**
+     * Kích hoạt Instant Deep Doze (sau 3s tắt màn hình):
+     * Cấu hình inactive_to=3000ms, idle_after_inactive_to=0ms,
+     * chạy step light và force-idle deep.
+     */
+    suspend fun triggerInstantDeepDoze(context: Context? = null): Boolean = withContext(Dispatchers.IO) {
+        try {
+            context?.let {
+                if (hasWriteSecureSettings(it)) {
+                    try {
+                        Settings.Global.putString(
+                            it.contentResolver,
+                            "device_idle_constants",
+                            "inactive_to=3000,idle_after_inactive_to=0"
+                        )
+                    } catch (_: Exception) {}
+                }
+            }
+            executeShizukuCommandWithTimeout(
+                arrayOf("settings", "put", "global", "device_idle_constants",
+                    "inactive_to=3000,idle_after_inactive_to=0"),
+                2000L
+            )
+            val rLight = executeShizukuCommandWithTimeout(
+                arrayOf("dumpsys", "deviceidle", "step", "light"),
+                2000L
+            )
+            val rDeep = executeShizukuCommandWithTimeout(
+                arrayOf("dumpsys", "deviceidle", "force-idle", "deep"),
+                2000L
+            )
+            Log.d(TAG, "⚡ [InstantDeepDoze] step light: ${rLight.stdout.trim()}, force-idle deep: ${rDeep.stdout.trim()}")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ [InstantDeepDoze] Lỗi triggerInstantDeepDoze: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Khôi phục trạng thái Deep Doze khi màn hình bật hoặc dừng tính năng:
+     * Unforce idle và xóa cấu hình device_idle_constants đè.
+     */
+    suspend fun resetDeepDoze(context: Context? = null): Boolean = withContext(Dispatchers.IO) {
+        try {
+            context?.let {
+                if (hasWriteSecureSettings(it)) {
+                    try {
+                        Settings.Global.putString(it.contentResolver, "device_idle_constants", null)
+                    } catch (_: Exception) {}
+                }
+            }
+            executeShizukuCommandWithTimeout(
+                arrayOf("settings", "delete", "global", "device_idle_constants"),
+                2000L
+            )
+            executeShizukuCommandWithTimeout(
+                arrayOf("dumpsys", "deviceidle", "unforce"),
+                2000L
+            )
+            Log.d(TAG, "✅ [DeepDoze] Reset device_idle_constants và unforce idle")
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Lỗi resetDeepDoze: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * GMS Doze Safe Mode: Tạm thời đưa Google Play Services vào chế độ Doze khi tắt màn hình
+     * bằng cách loại khỏi whitelist deviceidle và chặn RUN_IN_BACKGROUND.
+     * Khi bật màn hình (enable = false), khôi phục lại whitelist và cho phép chạy nền bình thường.
+     */
+    suspend fun setGmsDozeSafeMode(enable: Boolean): Boolean = withContext(Dispatchers.IO) {
+        val gmsPackage = "com.google.android.gms"
+        val whitelistOp = if (enable) "-$gmsPackage" else "+$gmsPackage"
+        val appOpMode = if (enable) "ignore" else "allow"
+
+        try {
+            // 1. Thao tác deviceidle whitelist
+            val r1 = executeShizukuCommandWithTimeout(
+                arrayOf("dumpsys", "deviceidle", "whitelist", whitelistOp),
+                2000L
+            )
+            // 2. Thao tác appops RUN_IN_BACKGROUND
+            val r2 = executeShizukuCommandWithTimeout(
+                arrayOf("cmd", "appops", "set", gmsPackage, "RUN_IN_BACKGROUND", appOpMode),
+                2000L
+            )
+            Log.d(TAG, "🛡️ [GmsDozeSafeMode] enable=$enable -> whitelist: $whitelistOp (${r1.isSuccess}), appops: $appOpMode (${r2.isSuccess})")
+            r1.isSuccess || r2.isSuccess
+        } catch (e: Exception) {
+            Log.w(TAG, "Lỗi setGmsDozeSafeMode(enable=$enable): ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Smart Auto-Freeze: Đưa ứng dụng vào Standby Bucket RESTRICTED hoặc ACTIVE,
+     * kết hợp với App Freezer của ActivityManager nếu nền tảng hỗ trợ.
+     */
+    suspend fun applySmartFreeze(packageName: String, freeze: Boolean): Boolean = withContext(Dispatchers.IO) {
+        val bucket = if (freeze) "restricted" else "active"
+        val freezeAction = if (freeze) "freeze" else "unfreeze"
+        try {
+            // 1. Standby Bucket (am set-standby-bucket <pkg> restricted/active)
+            val r1 = executeShizukuCommandWithTimeout(
+                arrayOf("am", "set-standby-bucket", packageName, bucket),
+                2000L
+            )
+            // 2. Activity Freezer nếu hệ thống hỗ trợ
+            executeShizukuCommandWithTimeout(
+                arrayOf("cmd", "activity", freezeAction, packageName),
+                2000L
+            )
+            Log.d(TAG, "🧊 [SmartFreeze] $packageName -> bucket=$bucket, freezer=$freezeAction, success=${r1.isSuccess}")
+            r1.isSuccess
+        } catch (e: Exception) {
+            Log.w(TAG, "Lỗi applySmartFreeze cho $packageName: ${e.message}")
+            false
         }
     }
 }

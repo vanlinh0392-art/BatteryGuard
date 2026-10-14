@@ -93,7 +93,8 @@ data class OvernightChargingParams(
     val preventOverheat: Boolean = true,
     val fastCharge90WEnabled: Boolean = true,
     val prioritizeFastChargeNoThrottle: Boolean = false,
-    val criticalThermalLimit: Float = 48.0f
+    val criticalThermalLimit: Float = 48.0f,
+    val syncOnChargeOnly: Boolean = false
 ) : AutomationConfigParams
 
 /**
@@ -105,7 +106,8 @@ data class LowBatterySaverParams(
     val capRefreshRate60Hz: Boolean = true,
     val enableSystemPowerSaver: Boolean = true,
     val turnOffAodAndRadios: Boolean = true,
-    val restrictBackgroundSync: Boolean = true
+    val restrictBackgroundSync: Boolean = true,
+    val smoothSaver120Hz: Boolean = false
 ) : AutomationConfigParams
 
 /**
@@ -117,7 +119,9 @@ data class DeepScreenOffParams(
     val enableDeepDoze: Boolean = true,
     val turnOffHotspotIfIdle: Boolean = true,
     val restoreBrightnessOnScreenOn: Boolean = true,
-    val screenOnBrightnessIncreasePercent: Int = 10
+    val screenOnBrightnessIncreasePercent: Int = 10,
+    val instantDeepDoze: Boolean = true,
+    val gmsDozeSafeMode: Boolean = false
 ) : AutomationConfigParams
 
 /**
@@ -129,7 +133,8 @@ data class AppStopManagementParams(
     val autoForceStop: Boolean = true,
     val enableFreezeMode: Boolean = false,
     val notifyBeforeStop: Boolean = true,
-    val excludeSystemApps: Boolean = true
+    val excludeSystemApps: Boolean = true,
+    val smartAutoFreeze: Boolean = true
 ) : AutomationConfigParams
 
 /**

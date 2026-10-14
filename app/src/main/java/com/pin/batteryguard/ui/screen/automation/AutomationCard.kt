@@ -773,6 +773,25 @@ fun AutomationConfigEditor(
                         onCheckedChange = { onUpdateParams(config.copy(preventOverheat = it)) }
                     )
                 }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Chỉ tự động đồng bộ khi sạc (Sync on Charge)", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Tắt đồng bộ ngầm khi dùng pin, chỉ đồng bộ khi cắm sạc",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = config.syncOnChargeOnly,
+                        onCheckedChange = { onUpdateParams(config.copy(syncOnChargeOnly = it)) }
+                    )
+                }
             }
         }
 
@@ -825,7 +844,34 @@ fun AutomationConfigEditor(
                     Text("Khóa tần số 60Hz", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.capRefreshRate60Hz,
-                        onCheckedChange = { onUpdateParams(config.copy(capRefreshRate60Hz = it)) }
+                        onCheckedChange = { onUpdateParams(config.copy(capRefreshRate60Hz = it, smoothSaver120Hz = if (it) false else config.smoothSaver120Hz)) }
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Mượt mà 120Hz (SmoothSaver)", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Duy trì màn hình 120Hz khi kích hoạt tiết kiệm pin",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = config.smoothSaver120Hz,
+                        onCheckedChange = { enabled ->
+                            onUpdateParams(
+                                if (enabled) {
+                                    config.copy(smoothSaver120Hz = true, capRefreshRate60Hz = false)
+                                } else {
+                                    config.copy(smoothSaver120Hz = false)
+                                }
+                            )
+                        }
                     )
                 }
 
@@ -909,6 +955,44 @@ fun AutomationConfigEditor(
                     Switch(
                         checked = config.enableDeepDoze,
                         onCheckedChange = { onUpdateParams(config.copy(enableDeepDoze = it)) }
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Ngủ sâu tức thì (Instant Doze)", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Vào chế độ Doze sâu ngay khi màn hình vừa tắt",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = config.instantDeepDoze,
+                        onCheckedChange = { onUpdateParams(config.copy(instantDeepDoze = it)) }
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Tối ưu ngầm Google (GMS Doze)", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Tối ưu dịch vụ Google Play Service khi ngủ sâu",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = config.gmsDozeSafeMode,
+                        onCheckedChange = { onUpdateParams(config.copy(gmsDozeSafeMode = it)) }
                     )
                 }
 
@@ -1057,6 +1141,25 @@ fun AutomationConfigEditor(
                     Switch(
                         checked = config.excludeSystemApps,
                         onCheckedChange = { onUpdateParams(config.copy(excludeSystemApps = it)) }
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Đóng băng tức thì khi rời app (Smart Freeze)", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Tự động đóng băng ứng dụng ngay khi thoát ra màn hình chính",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = config.smartAutoFreeze,
+                        onCheckedChange = { onUpdateParams(config.copy(smartAutoFreeze = it)) }
                     )
                 }
 

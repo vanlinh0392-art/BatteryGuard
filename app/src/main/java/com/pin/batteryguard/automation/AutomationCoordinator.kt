@@ -59,6 +59,8 @@ class AutomationCoordinator @Inject constructor(
     private var wifiDataDisableJob: Job? = null
     private var wifiDataRestoreJob: Job? = null
     private var screenOffDozeJob: Job? = null
+    private var instantDozeJob: Job? = null
+    @Volatile private var isGmsSafeModeApplied = false
 
     // Cache cấu hình đang áp dụng
     @Volatile private var currentConfig = AutomationMasterConfig()
@@ -146,6 +148,13 @@ class AutomationCoordinator @Inject constructor(
         wifiDataDisableJob?.cancel()
         wifiDataRestoreJob?.cancel()
         screenOffDozeJob?.cancel()
+        instantDozeJob?.cancel()
+        if (isGmsSafeModeApplied) {
+            isGmsSafeModeApplied = false
+            scope?.launch(Dispatchers.IO) {
+                SystemActionBridge.setGmsDozeSafeMode(false)
+            }
+        }
         isPowerSaverApplied = false
         this.scope = null
     }
@@ -210,7 +219,19 @@ class AutomationCoordinator @Inject constructor(
             updateRuleState(AutomationRuleId.DAY_NIGHT_RINGER, RuleActiveStatus.DISABLED, "Đã tắt")
         }
 
-        if (!new.overnightChargingEnabled) {
+        if (new.overnightChargingEnabled) {
+            val oldSyncOnCharge = old.overnightChargingParams.syncOnChargeOnly
+            val newSyncOnCharge = new.overnightChargingParams.syncOnChargeOnly
+            if (oldSyncOnCharge != newSyncOnCharge) {
+                scope?.launch(Dispatchers.IO) {
+                    if (newSyncOnCharge) {
+                        SystemActionBridge.setMasterSync(isCurrentlyCharging)
+                    } else {
+                        SystemActionBridge.setMasterSync(true)
+                    }
+                }
+            }
+        } else {
             updateRuleState(AutomationRuleId.OVERNIGHT_CHARGING, RuleActiveStatus.DISABLED, "Đã tắt")
         }
         if (!new.lowBatterySaverEnabled) {
@@ -218,6 +239,16 @@ class AutomationCoordinator @Inject constructor(
         }
         if (!new.deepScreenOffEnabled) {
             updateRuleState(AutomationRuleId.DEEP_SCREEN_OFF, RuleActiveStatus.DISABLED, "Đã tắt")
+        }
+        if (new.appStopManagementParams.smartAutoFreeze) {
+            updateRuleState(
+                AutomationRuleId.APP_STOP_MANAGEMENT,
+                RuleActiveStatus.IDLE,
+                "Smart Auto-Freeze sẵn sàng",
+                "Tự động đưa app hao pin vào Standby Bucket & Freeze"
+            )
+        } else {
+            updateRuleState(AutomationRuleId.APP_STOP_MANAGEMENT, RuleActiveStatus.DISABLED, "Đã tắt")
         }
     }
 
@@ -516,6 +547,13 @@ class AutomationCoordinator @Inject constructor(
             evaluateRingerSchedule()
         }
 
+        if (chargingStateChanged && currentConfig.overnightChargingEnabled && currentConfig.overnightChargingParams.syncOnChargeOnly) {
+            scope?.launch(Dispatchers.IO) {
+                SystemActionBridge.setMasterSync(charging)
+                Log.i(TAG, "⚡ [SyncOnCharge] Cắm/Rút sạc (charging=$charging) -> setMasterSync($charging)")
+            }
+        }
+
         if (charging) {
             val overnightParams = currentConfig.overnightChargingParams
 
@@ -652,16 +690,23 @@ class AutomationCoordinator @Inject constructor(
                         val dimmed = (current * 0.7f).toInt().coerceAtLeast(15)
                         SystemActionBridge.setScreenBrightness(context, dimmed)
                     }
-                    if (saverParams.capRefreshRate60Hz) {
+                    if (saverParams.smoothSaver120Hz) {
+                        SystemActionBridge.setSmoothSaverMode(context, enable = true)
+                    } else if (saverParams.capRefreshRate60Hz) {
                         SystemActionBridge.setDisplayRefreshRate60Hz(context)
                     }
                 }
+            }
+            val detailText = if (saverParams.smoothSaver120Hz) {
+                "Tự động bật Tiết kiệm pin (Mượt 120Hz)"
+            } else {
+                "Tự động bật Tiết kiệm pin & hạ màn hình 60Hz"
             }
             updateRuleState(
                 AutomationRuleId.LOW_BATTERY_SAVER,
                 RuleActiveStatus.ACTIVE,
                 "Đã kích hoạt Tiết kiệm pin (${level}%)",
-                "Tự động bật Tiết kiệm pin & hạ màn hình 60Hz"
+                detailText
             )
         } else if (charging || level > threshold) {
             if (isPowerSaverApplied) {
@@ -678,7 +723,7 @@ class AutomationCoordinator @Inject constructor(
                         SystemActionBridge.setScreenBrightness(context, restoreBright)
                         cachedBrightnessForBatterySaver = null
                     }
-                    if (saverParams.capRefreshRate60Hz) {
+                    if (saverParams.smoothSaver120Hz || saverParams.capRefreshRate60Hz) {
                         SystemActionBridge.restoreDisplayRefreshRate(context)
                     }
                 }
@@ -709,32 +754,70 @@ class AutomationCoordinator @Inject constructor(
         if (!currentConfig.isMasterEnabled || !currentConfig.deepScreenOffEnabled) return
 
         val deepParams = currentConfig.deepScreenOffParams
-        val delayMin = deepParams.delayMinutes
-        updateRuleState(
-            AutomationRuleId.DEEP_SCREEN_OFF,
-            RuleActiveStatus.IDLE,
-            "Chờ ${delayMin}p tối ưu Doze",
-            "Màn hình đã tắt"
-        )
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        val isMusicActive = audioManager?.isMusicActive == true
 
-        screenOffDozeJob?.cancel()
-        screenOffDozeJob = scope?.launch(Dispatchers.IO) {
-            delay(delayMin * 60 * 1000L)
-            Log.i(TAG, "📴 Kích hoạt sớm Deep Doze sau ${delayMin} phút tắt màn hình")
-            if (deepParams.enableDeepDoze) {
-                SystemActionBridge.triggerDeepDoze()
+        // 1. Instant Deep Doze: Debounce 3s sau khi tắt màn hình nếu không phát nhạc
+        if (deepParams.instantDeepDoze && !isMusicActive) {
+            instantDozeJob?.cancel()
+            instantDozeJob = scope?.launch(Dispatchers.IO) {
+                delay(3000L)
+                Log.i(TAG, "⚡ Kích hoạt Instant Deep Doze (sau 3s tắt màn hình)")
+                SystemActionBridge.triggerInstantDeepDoze(context)
+                updateRuleState(
+                    AutomationRuleId.DEEP_SCREEN_OFF,
+                    RuleActiveStatus.ACTIVE,
+                    "Đã kích hoạt Instant Deep Doze",
+                    "Ngủ sâu tức thì sau 3s tắt màn hình"
+                )
             }
+        }
+
+        // 2. GMS Doze Safe Mode: Tạm thời đưa GMS vào Doze khi tắt màn hình
+        if (deepParams.gmsDozeSafeMode) {
+            isGmsSafeModeApplied = true
+            scope?.launch(Dispatchers.IO) {
+                SystemActionBridge.setGmsDozeSafeMode(true)
+            }
+        }
+
+        val delayMin = deepParams.delayMinutes
+        if (!deepParams.instantDeepDoze || isMusicActive) {
             updateRuleState(
                 AutomationRuleId.DEEP_SCREEN_OFF,
-                RuleActiveStatus.ACTIVE,
-                "Đã kích hoạt Deep Doze",
-                "Đang duy trì chế độ ngủ sâu tối đa"
+                RuleActiveStatus.IDLE,
+                "Chờ ${delayMin}p tối ưu Doze",
+                "Màn hình đã tắt"
             )
+
+            screenOffDozeJob?.cancel()
+            screenOffDozeJob = scope?.launch(Dispatchers.IO) {
+                delay(delayMin * 60 * 1000L)
+                Log.i(TAG, "📴 Kích hoạt sớm Deep Doze sau ${delayMin} phút tắt màn hình")
+                if (deepParams.enableDeepDoze) {
+                    SystemActionBridge.triggerDeepDoze()
+                }
+                updateRuleState(
+                    AutomationRuleId.DEEP_SCREEN_OFF,
+                    RuleActiveStatus.ACTIVE,
+                    "Đã kích hoạt Deep Doze",
+                    "Đang duy trì chế độ ngủ sâu tối đa"
+                )
+            }
         }
     }
 
     fun onScreenOn() {
+        instantDozeJob?.cancel()
         screenOffDozeJob?.cancel()
+
+        // Khôi phục GMS Doze Safe Mode
+        if (isGmsSafeModeApplied || (currentConfig.deepScreenOffEnabled && currentConfig.deepScreenOffParams.gmsDozeSafeMode)) {
+            isGmsSafeModeApplied = false
+            scope?.launch(Dispatchers.IO) {
+                SystemActionBridge.setGmsDozeSafeMode(false)
+            }
+        }
 
         // Lưới an toàn 0% hao pin: Gọi ngay evaluateRingerSchedule() khi bật màn hình
         if (currentConfig.isMasterEnabled && currentConfig.dayNightRingerEnabled) {
@@ -759,18 +842,9 @@ class AutomationCoordinator @Inject constructor(
                 }
             }
 
-            // Khôi phục device_idle_constants và Master Sync khi bật màn hình
+            // Khôi phục device_idle_constants và unforce idle khi bật màn hình
             scope?.launch(Dispatchers.IO) {
-                try {
-                    // Reset device_idle_constants về mặc định
-                    executeShizukuCommandWithTimeout(
-                        arrayOf("settings", "delete", "global", "device_idle_constants"), 2000L
-                    )
-                    // Unforce idle nếu đang force
-                    executeShizukuCommandWithTimeout(
-                        arrayOf("dumpsys", "deviceidle", "unforce"), 2000L
-                    )
-                } catch (_: Exception) {}
+                SystemActionBridge.resetDeepDoze(context)
             }
             updateRuleState(
                 AutomationRuleId.DEEP_SCREEN_OFF,
@@ -779,6 +853,13 @@ class AutomationCoordinator @Inject constructor(
                 "Sẵn sàng kích hoạt Doze sâu"
             )
         }
+    }
+
+    /**
+     * Smart Auto-Freeze: Đưa app vào Standby Bucket RESTRICTED hoặc ACTIVE
+     */
+    suspend fun applySmartFreeze(packageName: String, freeze: Boolean): Boolean {
+        return SystemActionBridge.applySmartFreeze(packageName, freeze)
     }
 
     private fun initInitialBatteryState() {

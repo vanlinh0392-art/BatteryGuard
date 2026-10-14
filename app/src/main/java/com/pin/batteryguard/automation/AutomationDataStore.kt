@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.pin.batteryguard.ui.screen.automation.AppStopManagementParams
 import com.pin.batteryguard.ui.screen.automation.DayNightRingerParams
 import com.pin.batteryguard.ui.screen.automation.DeepScreenOffParams
 import com.pin.batteryguard.ui.screen.automation.LowBatterySaverParams
@@ -36,6 +37,7 @@ data class AutomationMasterConfig(
     val lowBatterySaverParams: LowBatterySaverParams = LowBatterySaverParams(),
     val deepScreenOffEnabled: Boolean = false,
     val deepScreenOffParams: DeepScreenOffParams = DeepScreenOffParams(),
+    val appStopManagementParams: AppStopManagementParams = AppStopManagementParams(),
     val autoSortActiveToTop: Boolean = true
 )
 
@@ -74,6 +76,7 @@ class AutomationDataStore @Inject constructor(
         private val KEY_OVERNIGHT_END_M = intPreferencesKey("overnight_end_min")
         private val KEY_CHARGING_FAST_CHARGE_90W = booleanPreferencesKey("charging_fast_charge_90w")
         private val KEY_CHARGING_PRIORITIZE_NO_THROTTLE = booleanPreferencesKey("charging_prioritize_no_throttle")
+        val KEY_OVERNIGHT_SYNC_ON_CHARGE = booleanPreferencesKey("overnight_sync_on_charge")
 
         // 4. Low Battery Saver
         private val KEY_LOW_BATTERY_ENABLED = booleanPreferencesKey("low_battery_enabled")
@@ -83,6 +86,7 @@ class AutomationDataStore @Inject constructor(
         private val KEY_LOW_BATTERY_POWER_SAVER = booleanPreferencesKey("low_battery_system_power_saver")
         private val KEY_LOW_BATTERY_AOD = booleanPreferencesKey("low_battery_turn_off_aod")
         private val KEY_LOW_BATTERY_SYNC = booleanPreferencesKey("low_battery_restrict_sync")
+        val KEY_LOW_BATTERY_SMOOTH_SAVER = booleanPreferencesKey("low_battery_smooth_saver")
 
         // 5. Deep Screen Off
         private val KEY_SCREEN_OFF_ENABLED = booleanPreferencesKey("screen_off_enabled")
@@ -92,6 +96,11 @@ class AutomationDataStore @Inject constructor(
         private val KEY_SCREEN_OFF_HOTSPOT = booleanPreferencesKey("screen_off_hotspot")
         private val KEY_SCREEN_OFF_RESTORE_BRIGHTNESS = booleanPreferencesKey("screen_off_restore_brightness")
         private val KEY_SCREEN_OFF_BRIGHTNESS_PERCENT = intPreferencesKey("screen_off_brightness_percent")
+        val KEY_SCREEN_OFF_INSTANT_DOZE = booleanPreferencesKey("screen_off_instant_doze")
+        val KEY_SCREEN_OFF_GMS_DOZE = booleanPreferencesKey("screen_off_gms_doze")
+
+        // 6. App Stop Management
+        val KEY_APP_STOP_SMART_FREEZE = booleanPreferencesKey("app_stop_smart_freeze")
     }
 
     val configFlow: Flow<AutomationMasterConfig> = context.automationDataStore.data.map { prefs ->
@@ -136,7 +145,8 @@ class AutomationDataStore @Inject constructor(
                 endHour = prefs[KEY_OVERNIGHT_END_H] ?: 6,
                 fastCharge90WEnabled = prefs[KEY_CHARGING_FAST_CHARGE_90W] ?: true,
                 prioritizeFastChargeNoThrottle = prefs[KEY_CHARGING_PRIORITIZE_NO_THROTTLE] ?: false,
-                criticalThermalLimit = 48.0f
+                criticalThermalLimit = 48.0f,
+                syncOnChargeOnly = prefs[KEY_OVERNIGHT_SYNC_ON_CHARGE] ?: false
             ),
             lowBatterySaverEnabled = prefs[KEY_LOW_BATTERY_ENABLED] ?: true,
             lowBatterySaverParams = LowBatterySaverParams(
@@ -145,7 +155,8 @@ class AutomationDataStore @Inject constructor(
                 capRefreshRate60Hz = prefs[KEY_LOW_BATTERY_60HZ] ?: true,
                 enableSystemPowerSaver = prefs[KEY_LOW_BATTERY_POWER_SAVER] ?: true,
                 turnOffAodAndRadios = prefs[KEY_LOW_BATTERY_AOD] ?: true,
-                restrictBackgroundSync = prefs[KEY_LOW_BATTERY_SYNC] ?: true
+                restrictBackgroundSync = prefs[KEY_LOW_BATTERY_SYNC] ?: true,
+                smoothSaver120Hz = prefs[KEY_LOW_BATTERY_SMOOTH_SAVER] ?: false
             ),
             deepScreenOffEnabled = prefs[KEY_SCREEN_OFF_ENABLED] ?: false,
             deepScreenOffParams = DeepScreenOffParams(
@@ -154,7 +165,12 @@ class AutomationDataStore @Inject constructor(
                 enableDeepDoze = prefs[KEY_SCREEN_OFF_DEEP_DOZE] ?: true,
                 turnOffHotspotIfIdle = prefs[KEY_SCREEN_OFF_HOTSPOT] ?: true,
                 restoreBrightnessOnScreenOn = prefs[KEY_SCREEN_OFF_RESTORE_BRIGHTNESS] ?: true,
-                screenOnBrightnessIncreasePercent = (prefs[KEY_SCREEN_OFF_BRIGHTNESS_PERCENT] ?: 10).coerceIn(5, 30)
+                screenOnBrightnessIncreasePercent = (prefs[KEY_SCREEN_OFF_BRIGHTNESS_PERCENT] ?: 10).coerceIn(5, 30),
+                instantDeepDoze = prefs[KEY_SCREEN_OFF_INSTANT_DOZE] ?: true,
+                gmsDozeSafeMode = prefs[KEY_SCREEN_OFF_GMS_DOZE] ?: false
+            ),
+            appStopManagementParams = AppStopManagementParams(
+                smartAutoFreeze = prefs[KEY_APP_STOP_SMART_FREEZE] ?: true
             ),
             autoSortActiveToTop = prefs[KEY_AUTO_SORT_ACTIVE] ?: true
         )
@@ -217,6 +233,7 @@ class AutomationDataStore @Inject constructor(
             prefs[KEY_OVERNIGHT_END_H] = params.endHour
             prefs[KEY_CHARGING_FAST_CHARGE_90W] = params.fastCharge90WEnabled
             prefs[KEY_CHARGING_PRIORITIZE_NO_THROTTLE] = params.prioritizeFastChargeNoThrottle
+            prefs[KEY_OVERNIGHT_SYNC_ON_CHARGE] = params.syncOnChargeOnly
         }
     }
 
@@ -228,6 +245,7 @@ class AutomationDataStore @Inject constructor(
             prefs[KEY_LOW_BATTERY_POWER_SAVER] = params.enableSystemPowerSaver
             prefs[KEY_LOW_BATTERY_AOD] = params.turnOffAodAndRadios
             prefs[KEY_LOW_BATTERY_SYNC] = params.restrictBackgroundSync
+            prefs[KEY_LOW_BATTERY_SMOOTH_SAVER] = params.smoothSaver120Hz
         }
     }
 
@@ -239,6 +257,14 @@ class AutomationDataStore @Inject constructor(
             prefs[KEY_SCREEN_OFF_HOTSPOT] = params.turnOffHotspotIfIdle
             prefs[KEY_SCREEN_OFF_RESTORE_BRIGHTNESS] = params.restoreBrightnessOnScreenOn
             prefs[KEY_SCREEN_OFF_BRIGHTNESS_PERCENT] = params.screenOnBrightnessIncreasePercent.coerceIn(5, 30)
+            prefs[KEY_SCREEN_OFF_INSTANT_DOZE] = params.instantDeepDoze
+            prefs[KEY_SCREEN_OFF_GMS_DOZE] = params.gmsDozeSafeMode
+        }
+    }
+
+    suspend fun updateAppStopManagementParams(params: AppStopManagementParams) {
+        context.automationDataStore.edit { prefs ->
+            prefs[KEY_APP_STOP_SMART_FREEZE] = params.smartAutoFreeze
         }
     }
 }
