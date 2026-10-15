@@ -1,10 +1,15 @@
 package com.pin.batteryguard.shizuku
 
+import android.os.DeadObjectException
+import android.util.Log
+import java.lang.reflect.InvocationTargetException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+
+private const val TAG = "ShizukuProcessUtils"
 
 data class ProcessExecutionResult(
     val exitCode: Int,
@@ -67,10 +72,39 @@ suspend fun executeShizukuCommandWithTimeout(
                 isTimedOut = true
             )
         }
+    } catch (e: DeadObjectException) {
+        try {
+            process?.destroyForcibly()
+        } catch (_: Exception) {}
+        Log.w(TAG, "Shizuku binder DeadObjectException: ${e.message}")
+        ProcessExecutionResult(
+            exitCode = -1,
+            stdout = "",
+            stderr = "DeadObjectException: Shizuku service is dead or unavailable",
+            isTimedOut = false
+        )
+    } catch (e: InvocationTargetException) {
+        try {
+            process?.destroyForcibly()
+        } catch (_: Exception) {}
+        val target = e.targetException ?: e.cause
+        val isDead = target is DeadObjectException || target?.cause is DeadObjectException
+        Log.w(TAG, "Shizuku InvocationTargetException: ${target?.message ?: e.message}")
+        ProcessExecutionResult(
+            exitCode = -1,
+            stdout = "",
+            stderr = if (isDead) {
+                "DeadObjectException: Shizuku service died"
+            } else {
+                target?.message ?: e.message ?: "InvocationTargetException"
+            },
+            isTimedOut = false
+        )
     } catch (e: Exception) {
         try {
             process?.destroyForcibly()
         } catch (_: Exception) {}
+        Log.w(TAG, "Process execution error: ${e.message}")
         ProcessExecutionResult(
             exitCode = -1,
             stdout = "",

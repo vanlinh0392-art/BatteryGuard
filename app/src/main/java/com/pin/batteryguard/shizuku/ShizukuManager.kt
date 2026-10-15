@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import rikka.shizuku.Shizuku
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -51,6 +52,7 @@ class ShizukuManager @Inject constructor(
 
     /** BUG #2 FIX: Flag để chỉ grant quyền 1 lần duy nhất mỗi session */
     @Volatile private var permissionsGranted = false
+    private val permissionMutex = kotlinx.coroutines.sync.Mutex()
 
     /**
      * Cờ bảo vệ: Khi AppShield đang kích hoạt (ẩn Developer Options/ADB để bảo vệ app ngân hàng),
@@ -69,6 +71,8 @@ class ShizukuManager @Inject constructor(
 
     private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
         android.util.Log.d("ShizukuManager", "🔗 Binder received! Shizuku đã kết nối lại.")
+        autoReviveJob?.cancel()
+        autoReviveJob = null
         autoReviveCount = 0  // Reset bộ đếm khi binder sống lại thành công
         invalidateCache()
         updateStatus()
@@ -414,52 +418,67 @@ class ShizukuManager @Inject constructor(
         val hasDnd = (context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager)?.isNotificationPolicyAccessGranted == true
         val hasWriteSettings = Settings.System.canWrite(context)
 
-        if (hasSecure && hasStats && hasDump && hasDnd && hasWriteSettings) {
-            permissionsGranted = true
+        if (permissionsGranted && hasSecure && hasStats && hasDump && hasDnd && hasWriteSettings) {
             onCompleted?.invoke(true)
             return
         }
 
         CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val packageName = context.packageName
-                val permsToGrant = mutableListOf<String>()
-
-                // Chỉ grant quyền nào chưa có
-                if (!hasStats) {
-                    permsToGrant.add("android.permission.BATTERY_STATS")
-                }
-                if (!hasDump) {
-                    permsToGrant.add("android.permission.DUMP")
-                }
-                if (!hasSecure) {
-                    permsToGrant.add("android.permission.WRITE_SECURE_SETTINGS")
+            permissionMutex.withLock {
+                if (permissionsGranted) {
+                    onCompleted?.invoke(hasWriteSecureSettings())
+                    return@withLock
                 }
 
-                var successCount = 0
-                for (perm in permsToGrant) {
-                    val result = executeShizukuCommandWithTimeout(arrayOf("pm", "grant", packageName, perm), timeoutMs = 5000L)
-                    if (result.isSuccess) {
-                        successCount++
-                    } else {
-                        android.util.Log.w("ShizukuManager", "⚠️ Không thể cấp quyền $perm: ${result.stderr}")
+                try {
+                    val packageName = context.packageName
+                    val permsToGrant = mutableListOf<String>()
+
+                    // Chỉ grant quyền nào chưa có
+                    if (!hasStats) {
+                        permsToGrant.add("android.permission.BATTERY_STATS")
                     }
-                }
+                    if (!hasDump) {
+                        permsToGrant.add("android.permission.DUMP")
+                    }
+                    if (!hasSecure) {
+                        permsToGrant.add("android.permission.WRITE_SECURE_SETTINGS")
+                    }
 
-                // Cấp quyền DND và WRITE_SETTINGS qua appops / cmd
-                executeShizukuCommandWithTimeout(arrayOf("appops", "set", packageName, "ACCESS_NOTIFICATION_POLICY", "allow"), timeoutMs = 3000L)
-                executeShizukuCommandWithTimeout(arrayOf("cmd", "notification", "allow_dnd", packageName), timeoutMs = 3000L)
-                executeShizukuCommandWithTimeout(arrayOf("appops", "set", packageName, "WRITE_SETTINGS", "allow"), timeoutMs = 3000L)
+                    var successCount = 0
+                    for (perm in permsToGrant) {
+                        val result = executeShizukuCommandWithTimeout(arrayOf("pm", "grant", packageName, perm), timeoutMs = 5000L)
+                        if (result.isSuccess) {
+                            successCount++
+                        } else {
+                            android.util.Log.w("ShizukuManager", "⚠️ Không thể cấp quyền $perm: ${result.stderr}")
+                        }
+                    }
 
-                val secureGranted = hasWriteSecureSettings()
-                android.util.Log.d("ShizukuManager", "✅ Đã grant qua Shizuku. WRITE_SECURE_SETTINGS = $secureGranted")
-                if (secureGranted) {
-                    permissionsGranted = true
+                    // Cấp quyền DND và WRITE_SETTINGS qua appops / cmd
+                    executeShizukuCommandWithTimeout(arrayOf("appops", "set", packageName, "ACCESS_NOTIFICATION_POLICY", "allow"), timeoutMs = 3000L)
+                    executeShizukuCommandWithTimeout(arrayOf("cmd", "notification", "allow_dnd", packageName), timeoutMs = 3000L)
+                    executeShizukuCommandWithTimeout(arrayOf("appops", "set", packageName, "WRITE_SETTINGS", "allow"), timeoutMs = 3000L)
+
+                    // Proactive Anti-Kill defense for BOTH "moe.shizuku.privileged.api" and context.packageName
+                    val antiKillPkgs = listOf("moe.shizuku.privileged.api", packageName)
+                    for (pkg in antiKillPkgs) {
+                        executeShizukuCommandWithTimeout(arrayOf("cmd", "appops", "set", pkg, "RUN_IN_BACKGROUND", "allow"), timeoutMs = 3000L)
+                        executeShizukuCommandWithTimeout(arrayOf("cmd", "appops", "set", pkg, "RUN_ANY_IN_BACKGROUND", "allow"), timeoutMs = 3000L)
+                        executeShizukuCommandWithTimeout(arrayOf("dumpsys", "deviceidle", "whitelist", "+$pkg"), timeoutMs = 3000L)
+                        executeShizukuCommandWithTimeout(arrayOf("am", "set-standby-bucket", pkg, "active"), timeoutMs = 3000L)
+                    }
+
+                    val secureGranted = hasWriteSecureSettings()
+                    android.util.Log.d("ShizukuManager", "✅ Đã grant qua Shizuku. WRITE_SECURE_SETTINGS = $secureGranted")
+                    if (secureGranted) {
+                        permissionsGranted = true
+                    }
+                    onCompleted?.invoke(secureGranted)
+                } catch (e: Exception) {
+                    android.util.Log.e("ShizukuManager", "❌ Lỗi khi tự động cấp quyền qua Shizuku: ${e.message}")
+                    onCompleted?.invoke(false)
                 }
-                onCompleted?.invoke(secureGranted)
-            } catch (e: Exception) {
-                android.util.Log.e("ShizukuManager", "❌ Lỗi khi tự động cấp quyền qua Shizuku: ${e.message}")
-                onCompleted?.invoke(false)
             }
         }
     }

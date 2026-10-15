@@ -226,6 +226,14 @@ object NotificationHelper {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+        // Mở Shizuku Manager qua package name
+        val openShizukuIntent = context.packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
+            ?: Intent(context, MainActivity::class.java)
+        val openShizukuPendingIntent = PendingIntent.getActivity(
+            context, 7, openShizukuIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
         val notification = NotificationCompat.Builder(context, CHANNEL_SUMMARY)
             .setContentTitle("⚠️ Mất kết nối Shizuku")
             .setContentText("Bấm để tự bật Wireless Debugging và kết nối lại dịch vụ.")
@@ -234,7 +242,8 @@ object NotificationHelper {
             .setAutoCancel(true)
             .setOngoing(false)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .addAction(0, "Kết nối lại", reconnectPendingIntent)
+            .addAction(0, "⚡ Khôi phục ngay", reconnectPendingIntent)
+            .addAction(0, "Mở Shizuku", openShizukuPendingIntent)
             .build()
 
         manager.notify(NOTIFICATION_ID_SHIZUKU_DISCONNECT, notification)

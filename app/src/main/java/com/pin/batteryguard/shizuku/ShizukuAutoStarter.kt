@@ -13,7 +13,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
 import java.io.File
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,7 +25,7 @@ class ShizukuAutoStarter @Inject constructor(
 ) {
     private val startMutex = Mutex()
     @Volatile private var lastStartAttemptTime = 0L
-    private val AUTO_START_COOLDOWN_MS = 10 * 60 * 1000L
+    private val AUTO_START_COOLDOWN_MS = 2 * 60 * 1000L
 
     suspend fun startShizukuService(
         notifyOnSuccess: Boolean = true,
@@ -66,17 +65,10 @@ class ShizukuAutoStarter @Inject constructor(
             // 0. Chuẩn bị môi trường ADB
             prepareAdbEnvironment()
 
-            // === CÁCH 1: Chạy trực tiếp qua ProcessBuilder (giống Tasker) ===
-            // Không cần ADB TCP → không hỏi "cho phép kết nối" RSA key
-            val directStarted = tryStartDirect()
-            if (directStarted && waitForBinder(notifyOnSuccess)) {
-                return@withContext true
-            }
-
             // daemon adbd cần thời gian khởi tạo socket sau khi bật Dev Mode và ADB
             delay(2500L)
             val starterCmd = buildShizukuStarterCommand()
-            Log.d(TAG, "Fallback: Starting Shizuku via ADB TCP: $starterCmd")
+            Log.d(TAG, "Starting Shizuku via ADB TCP: $starterCmd")
 
             var executed = false
             val candidatePorts = mutableListOf(5555)
@@ -105,33 +97,6 @@ class ShizukuAutoStarter @Inject constructor(
         }
     }
 
-    /**
-     * Chạy Shizuku starter trực tiếp bằng ProcessBuilder — giống cách Tasker làm.
-     * Không cần ADB TCP, không hỏi RSA key authorization.
-     */
-    private fun tryStartDirect(): Boolean {
-        val libPath = getShizukuLibPath() ?: return false
-
-        return try {
-            Log.i(TAG, "Thử khởi động trực tiếp: $libPath")
-            val process = ProcessBuilder(libPath)
-                .redirectErrorStream(true)
-                .start()
-
-            val finished = process.waitFor(10, TimeUnit.SECONDS)
-            val output = process.inputStream.bufferedReader().use { it.readText() }.take(500)
-            val exitCode = if (finished) process.exitValue() else -1
-
-            if (!finished) process.destroyForcibly()
-
-            Log.i(TAG, "Direct exec result: exit=$exitCode, output=$output")
-            // exit 0 = thành công, output chứa "shizuku_starter exit with 0"
-            finished && exitCode == 0
-        } catch (e: Exception) {
-            Log.w(TAG, "Direct exec failed: ${e.message}")
-            false
-        }
-    }
 
     /**
      * Chờ Shizuku binder alive sau khi gửi lệnh.
@@ -177,9 +142,9 @@ class ShizukuAutoStarter @Inject constructor(
         val directLibPath = getShizukuLibPath()
 
         val dynamicCmd = "PKG=moe.shizuku.privileged.api; " +
-                "LIB=\$(dirname \$(pm path --user 0 \$PKG 2>&1 </dev/null | sed 's|.*:||'))/lib/*/libshizuku.so; " +
+                "LIB=\$(dirname \$(pm path --user 0 \$PKG 2>&1 </dev/null | head -n 1 | sed 's/package://'))/lib/*/libshizuku.so; " +
                 "([ -f \"\$LIB\" ] && exec \"\$LIB\") || " +
-                "(CP=\$(pm path \$PKG 2>&1 | sed 's|.*:||') && [ -n \"\$CP\" ] && CLASSPATH=\$CP exec app_process /system/bin moe.shizuku.server.Starter)"
+                "(CP=\$(pm path \$PKG 2>&1 | head -n 1 | sed 's/package://') && [ -n \"\$CP\" ] && CLASSPATH=\$CP exec app_process /system/bin moe.shizuku.server.Starter)"
 
         return if (directLibPath != null) {
             "([ -f \"$directLibPath\" ] && exec \"$directLibPath\") || ($dynamicCmd)"
