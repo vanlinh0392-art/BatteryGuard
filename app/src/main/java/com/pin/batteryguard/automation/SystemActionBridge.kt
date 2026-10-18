@@ -155,7 +155,7 @@ object SystemActionBridge {
      * - Cập nhật Settings.Global để đồng bộ icon/UI nếu có quyền.
      * - Bắt buộc thực thi lệnh shell phần cứng (cmd phone data / svc data) qua Shizuku hoặc Local ADB.
      */
-    suspend fun toggleMobileData(context: Context, enable: Boolean, targetSim: TargetSimSelection) {
+    suspend fun toggleMobileData(context: Context, enable: Boolean, targetSim: TargetSimSelection = TargetSimSelection.AUTO) {
         val flag = if (enable) 1 else 0
         val subId = SimHelper.getTargetSubId(context, targetSim)
 
@@ -318,6 +318,15 @@ object SystemActionBridge {
         } catch (_: Exception) {
             128
         }
+    }
+
+    /**
+     * Kiểm tra chế độ điều chỉnh độ sáng tự động (Auto-Brightness / Adaptive Brightness)
+     */
+    fun isAutoBrightnessEnabled(context: Context): Boolean {
+        return try {
+            Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE, 0) == Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC
+        } catch (_: Exception) { false }
     }
 
     /**
@@ -866,5 +875,70 @@ object SystemActionBridge {
         }
         Log.i(TAG, "🔒 [XiaomiTelemetry] frozen=$frozen -> Đã áp dụng cho $count/7 gói dịch vụ")
         count
+    }
+
+    /**
+     * Danh sách các gói liên kết / interconnect / camera ảo của Xiaomi
+     */
+    val XIAOMI_INTERCONNECT_PACKAGES = listOf(
+        "com.milink.service",
+        "com.milink.crossdeviceservice",
+        "com.xiaomi.cameratools",
+        "com.xiaomi.vtcamera"
+    )
+
+    /**
+     * Đóng băng hoặc khôi phục các dịch vụ Xiaomi Interconnect (MiLink, Virtual Camera)
+     */
+    suspend fun setXiaomiInterconnectFrozen(frozen: Boolean): Int = withContext(Dispatchers.IO) {
+        var count = 0
+        for (pkg in XIAOMI_INTERCONNECT_PACKAGES) {
+            try {
+                if (frozen) {
+                    executeShizukuCommandWithTimeout(arrayOf("pm", "disable-user", "--user", "0", pkg), 1500L)
+                    executeShizukuCommandWithTimeout(arrayOf("am", "force-stop", pkg), 1500L)
+                    executeShizukuCommandWithTimeout(arrayOf("am", "set-standby-bucket", pkg, "restricted"), 1500L)
+                    executeShizukuCommandWithTimeout(arrayOf("cmd", "appops", "set", pkg, "RUN_IN_BACKGROUND", "ignore"), 1500L)
+                    executeShizukuCommandWithTimeout(arrayOf("cmd", "appops", "set", pkg, "WAKE_LOCK", "ignore"), 1500L)
+                    executeShizukuCommandWithTimeout(arrayOf("dumpsys", "deviceidle", "whitelist", "-$pkg"), 1500L)
+                    count++
+                } else {
+                    executeShizukuCommandWithTimeout(arrayOf("pm", "enable", pkg), 1500L)
+                    executeShizukuCommandWithTimeout(arrayOf("am", "set-standby-bucket", pkg, "active"), 1500L)
+                    executeShizukuCommandWithTimeout(arrayOf("cmd", "appops", "set", pkg, "RUN_IN_BACKGROUND", "allow"), 1500L)
+                    executeShizukuCommandWithTimeout(arrayOf("cmd", "appops", "set", pkg, "WAKE_LOCK", "allow"), 1500L)
+                    count++
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Lỗi setXiaomiInterconnectFrozen($pkg, frozen=$frozen): ${e.message}")
+            }
+        }
+        Log.i(TAG, "🔗 [XiaomiInterconnect] frozen=$frozen -> Đã áp dụng cho $count/${XIAOMI_INTERCONNECT_PACKAGES.size} gói dịch vụ")
+        count
+    }
+
+    /**
+     * Vô hiệu hóa hoặc khôi phục tính năng dò quét Wi-Fi và Bluetooth ngầm (Settings.Global)
+     */
+    suspend fun setBackgroundScanningDisabled(context: Context, disabled: Boolean) = withContext(Dispatchers.IO) {
+        val flag = if (disabled) 0 else 1
+        val flagStr = flag.toString()
+        tryDirectThenFallback(
+            actionName = "SetBackgroundScanningDisabled_$disabled",
+            directAction = {
+                if (hasWriteSecureSettings(context)) {
+                    val cr = context.contentResolver
+                    val w = Settings.Global.putInt(cr, "wifi_scan_always_enabled", flag)
+                    val b = Settings.Global.putInt(cr, "ble_scan_always_enabled", flag)
+                    w || b
+                } else {
+                    false
+                }
+            },
+            fallbackAction = {
+                executeShizukuCommandWithTimeout(arrayOf("settings", "put", "global", "wifi_scan_always_enabled", flagStr), 2000L)
+                executeShizukuCommandWithTimeout(arrayOf("settings", "put", "global", "ble_scan_always_enabled", flagStr), 2000L)
+            }
+        )
     }
 }

@@ -973,6 +973,30 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
+                    Text("Tắt dữ liệu mạng khi tắt màn", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = config.turnOffDataOnScreenOff,
+                        onCheckedChange = { onUpdateParams(config.copy(turnOffDataOnScreenOff = it)) }
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Tắt dò quét Wi-Fi & Bluetooth ngầm", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = config.disableBackgroundScanning,
+                        onCheckedChange = { onUpdateParams(config.copy(disableBackgroundScanning = it)) }
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     Text("Tăng sáng khi mở màn", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.restoreBrightnessOnScreenOn,
@@ -1056,7 +1080,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Chu kỳ quét:",
+                        text = "Chu kỳ:",
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1121,7 +1145,7 @@ fun AutomationConfigEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Đóng băng tức thì khi rời app (Smart Freeze)", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text("Đóng băng khi rời app", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = config.smartAutoFreeze,
                         onCheckedChange = { onUpdateParams(config.copy(smartAutoFreeze = it)) }
@@ -1140,63 +1164,57 @@ fun AutomationConfigEditor(
                     )
                 }
 
-                // D. Chế độ xử lý Segmented Pill Bar
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = "Chế độ:",
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+                    Text("Đóng băng liên kết Xiaomi (MiLink, Camera ảo)", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = config.freezeXiaomiInterconnect,
+                        onCheckedChange = { onUpdateParams(config.copy(freezeXiaomiInterconnect = it)) }
                     )
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                            .padding(2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        listOf(
-                            false to "🛑 Buộc dừng",
-                            true to "🧊 Đóng băng"
-                        ).forEach { (isFreeze, label) ->
-                            val isSelected = config.enableFreezeMode == isFreeze
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                                modifier = Modifier.clickable { onUpdateParams(config.copy(enableFreezeMode = isFreeze)) }
-                            ) {
-                                Text(
-                                    text = label,
-                                    fontSize = 12.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                )
-                            }
-                        }
-                    }
                 }
 
-                // E. Nút Rã băng toàn bộ app (Chỉ hiện khi đang ở chế độ Đóng băng)
-                AnimatedVisibility(visible = config.enableFreezeMode) {
-                    Button(
-                        onClick = onUnfreezeAllApps,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(34.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.AcUnit,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Dừng app ngoại lệ nếu vượt ngưỡng pin", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = config.stopExceptionsIfOverThreshold,
+                        onCheckedChange = { onUpdateParams(config.copy(stopExceptionsIfOverThreshold = it)) }
+                    )
+                }
+
+                AnimatedVisibility(visible = config.stopExceptionsIfOverThreshold) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Ngưỡng pin app ngoại lệ:", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                "${config.exceptionDrainThresholdPercent.roundToInt()}%/h",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
+
+                        Slider(
+                            value = config.exceptionDrainThresholdPercent,
+                            onValueChange = { onUpdateParams(config.copy(exceptionDrainThresholdPercent = it.roundToInt().toFloat())) },
+                            valueRange = 1f..10f,
+                            steps = 8,
+                            colors = SliderDefaults.colors(
+                                thumbColor = MaterialTheme.colorScheme.primary,
+                                activeTrackColor = MaterialTheme.colorScheme.primary
+                            )
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Rã băng toàn bộ app", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

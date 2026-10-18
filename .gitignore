@@ -25,3 +25,6 @@ app/build/
 .agents/
 .kotlin/
 GEMINI.md
+decompiled_v1046/
+*.xml
+tmp_mcp/

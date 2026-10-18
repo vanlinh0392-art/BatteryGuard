@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -98,10 +99,15 @@ class AutomationDataStore @Inject constructor(
         private val KEY_SCREEN_OFF_BRIGHTNESS_PERCENT = intPreferencesKey("screen_off_brightness_percent")
         val KEY_SCREEN_OFF_INSTANT_DOZE = booleanPreferencesKey("screen_off_instant_doze")
         val KEY_SCREEN_OFF_GMS_DOZE = booleanPreferencesKey("screen_off_gms_doze")
+        val KEY_SCREEN_OFF_TURN_OFF_DATA = booleanPreferencesKey("screen_off_turn_off_data")
+        val KEY_SCREEN_OFF_DISABLE_BG_SCANNING = booleanPreferencesKey("screen_off_disable_bg_scanning")
 
         // 6. App Stop Management
         val KEY_APP_STOP_SMART_FREEZE = booleanPreferencesKey("app_stop_smart_freeze")
         val KEY_APP_STOP_FREEZE_XIAOMI_TELEMETRY = booleanPreferencesKey("app_stop_freeze_xiaomi_telemetry")
+        val KEY_APP_STOP_FREEZE_XIAOMI_INTERCONNECT = booleanPreferencesKey("app_stop_freeze_xiaomi_interconnect")
+        val KEY_APP_STOP_STOP_EXCEPTIONS_IF_OVER_THRESHOLD = booleanPreferencesKey("app_stop_stop_exceptions_if_over_threshold")
+        val KEY_APP_STOP_EXCEPTION_DRAIN_THRESHOLD = floatPreferencesKey("app_stop_exception_drain_threshold")
     }
 
     val configFlow: Flow<AutomationMasterConfig> = context.automationDataStore.data.map { prefs ->
@@ -168,11 +174,16 @@ class AutomationDataStore @Inject constructor(
                 restoreBrightnessOnScreenOn = prefs[KEY_SCREEN_OFF_RESTORE_BRIGHTNESS] ?: true,
                 screenOnBrightnessIncreasePercent = (prefs[KEY_SCREEN_OFF_BRIGHTNESS_PERCENT] ?: 10).coerceIn(5, 30),
                 instantDeepDoze = prefs[KEY_SCREEN_OFF_INSTANT_DOZE] ?: true,
-                gmsDozeSafeMode = prefs[KEY_SCREEN_OFF_GMS_DOZE] ?: false
+                gmsDozeSafeMode = prefs[KEY_SCREEN_OFF_GMS_DOZE] ?: false,
+                turnOffDataOnScreenOff = prefs[KEY_SCREEN_OFF_TURN_OFF_DATA] ?: false,
+                disableBackgroundScanning = prefs[KEY_SCREEN_OFF_DISABLE_BG_SCANNING] ?: false
             ),
             appStopManagementParams = AppStopManagementParams(
                 smartAutoFreeze = prefs[KEY_APP_STOP_SMART_FREEZE] ?: true,
-                freezeXiaomiTelemetry = prefs[KEY_APP_STOP_FREEZE_XIAOMI_TELEMETRY] ?: false
+                freezeXiaomiTelemetry = prefs[KEY_APP_STOP_FREEZE_XIAOMI_TELEMETRY] ?: false,
+                freezeXiaomiInterconnect = prefs[KEY_APP_STOP_FREEZE_XIAOMI_INTERCONNECT] ?: false,
+                stopExceptionsIfOverThreshold = prefs[KEY_APP_STOP_STOP_EXCEPTIONS_IF_OVER_THRESHOLD] ?: false,
+                exceptionDrainThresholdPercent = prefs[KEY_APP_STOP_EXCEPTION_DRAIN_THRESHOLD] ?: 5.0f
             ),
             autoSortActiveToTop = prefs[KEY_AUTO_SORT_ACTIVE] ?: true
         )
@@ -261,6 +272,8 @@ class AutomationDataStore @Inject constructor(
             prefs[KEY_SCREEN_OFF_BRIGHTNESS_PERCENT] = params.screenOnBrightnessIncreasePercent.coerceIn(5, 30)
             prefs[KEY_SCREEN_OFF_INSTANT_DOZE] = params.instantDeepDoze
             prefs[KEY_SCREEN_OFF_GMS_DOZE] = params.gmsDozeSafeMode
+            prefs[KEY_SCREEN_OFF_TURN_OFF_DATA] = params.turnOffDataOnScreenOff
+            prefs[KEY_SCREEN_OFF_DISABLE_BG_SCANNING] = params.disableBackgroundScanning
         }
     }
 
@@ -268,6 +281,9 @@ class AutomationDataStore @Inject constructor(
         context.automationDataStore.edit { prefs ->
             prefs[KEY_APP_STOP_SMART_FREEZE] = params.smartAutoFreeze
             prefs[KEY_APP_STOP_FREEZE_XIAOMI_TELEMETRY] = params.freezeXiaomiTelemetry
+            prefs[KEY_APP_STOP_FREEZE_XIAOMI_INTERCONNECT] = params.freezeXiaomiInterconnect
+            prefs[KEY_APP_STOP_STOP_EXCEPTIONS_IF_OVER_THRESHOLD] = params.stopExceptionsIfOverThreshold
+            prefs[KEY_APP_STOP_EXCEPTION_DRAIN_THRESHOLD] = params.exceptionDrainThresholdPercent
         }
     }
 }

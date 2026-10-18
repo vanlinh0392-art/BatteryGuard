@@ -63,6 +63,54 @@ class DrainPolicyTest {
         assertEquals(DetectionAction.FREEZE, decision.action)
     }
 
+    @Test
+    fun evaluate_exception_guarded_when_stop_exceptions_disabled() {
+        val decision = policy.evaluate(
+            sample(rate = 6.0, delta = 50.0),
+            context(isException = true),
+            config.copy(stopExceptionsIfOverThreshold = false, exceptionDrainThresholdPercent = 5.0f)
+        )
+
+        assertEquals(DetectionAction.WARN, decision.action)
+        assertEquals(DecisionGuard.EXCEPTION, decision.guard)
+    }
+
+    @Test
+    fun evaluate_exception_guarded_when_below_exception_threshold() {
+        val decision = policy.evaluate(
+            sample(rate = 4.0, delta = 30.0),
+            context(isException = true),
+            config.copy(stopExceptionsIfOverThreshold = true, exceptionDrainThresholdPercent = 5.0f)
+        )
+
+        assertEquals(DetectionAction.WARN, decision.action)
+        assertEquals(DecisionGuard.EXCEPTION, decision.guard)
+    }
+
+    @Test
+    fun evaluate_exception_stopped_when_exceeds_exception_threshold() {
+        val decision = policy.evaluate(
+            sample(rate = 6.0, delta = 50.0),
+            context(isException = true),
+            config.copy(stopExceptionsIfOverThreshold = true, exceptionDrainThresholdPercent = 5.0f)
+        )
+
+        assertEquals(DetectionAction.FORCE_STOP, decision.action)
+        assertEquals("exceeded_exception_threshold", decision.reason)
+    }
+
+    @Test
+    fun evaluate_exception_frozen_when_repeated_and_freeze_mode() {
+        val decision = policy.evaluate(
+            sample(rate = 6.0, delta = 50.0),
+            context(isException = true, verifiedStopsInWindow = 2),
+            config.copy(enableFreezeMode = true, stopExceptionsIfOverThreshold = true, exceptionDrainThresholdPercent = 5.0f)
+        )
+
+        assertEquals(DetectionAction.FREEZE, decision.action)
+        assertEquals("exceeded_exception_threshold", decision.reason)
+    }
+
     private fun sample(rate: Double, delta: Double) = UidDrainSample(
         uid = 11384,
         userId = 0,
@@ -75,11 +123,13 @@ class DrainPolicyTest {
     private fun context(
         consecutiveBreaches: Int = 0,
         verifiedStopsInWindow: Int = 0,
+        isException: Boolean = false,
         isProtected: Boolean = false,
         isSharedUid: Boolean = false
     ) = DetectionContext(
         consecutiveBreaches = consecutiveBreaches,
         verifiedStopsInWindow = verifiedStopsInWindow,
+        isException = isException,
         isProtected = isProtected,
         isSharedUid = isSharedUid
     )

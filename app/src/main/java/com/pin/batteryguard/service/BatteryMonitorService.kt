@@ -40,6 +40,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -62,6 +63,7 @@ class BatteryMonitorService : LifecycleService() {
     @Inject lateinit var protectionChecker: AppProtectionChecker
     @Inject lateinit var appShieldManager: com.pin.batteryguard.domain.shield.AppShieldManager
     @Inject lateinit var automationCoordinator: com.pin.batteryguard.automation.AutomationCoordinator
+    @Inject lateinit var automationDataStore: com.pin.batteryguard.automation.AutomationDataStore
 
     private val stateMutex = Mutex()
     private val differ = BatteryDrainDiffer()
@@ -100,7 +102,12 @@ class BatteryMonitorService : LifecycleService() {
 
         lifecycleScope.launch {
             settingsDataStore.migrateIfNeeded()
-            settingsDataStore.configFlow.collect { newConfig ->
+            combine(settingsDataStore.configFlow, automationDataStore.configFlow) { settingsConfig, autoConfig ->
+                settingsConfig.copy(
+                    stopExceptionsIfOverThreshold = autoConfig.appStopManagementParams.stopExceptionsIfOverThreshold,
+                    exceptionDrainThresholdPercent = autoConfig.appStopManagementParams.exceptionDrainThresholdPercent
+                )
+            }.collect { newConfig ->
                 stateMutex.withLock {
                     config = newConfig
                     reconcileMonitoringState()

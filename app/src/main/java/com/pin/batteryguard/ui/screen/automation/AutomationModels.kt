@@ -121,7 +121,9 @@ data class DeepScreenOffParams(
     val restoreBrightnessOnScreenOn: Boolean = true,
     val screenOnBrightnessIncreasePercent: Int = 10,
     val instantDeepDoze: Boolean = true,
-    val gmsDozeSafeMode: Boolean = false
+    val gmsDozeSafeMode: Boolean = false,
+    val turnOffDataOnScreenOff: Boolean = false,
+    val disableBackgroundScanning: Boolean = false
 ) : AutomationConfigParams
 
 /**
@@ -135,7 +137,10 @@ data class AppStopManagementParams(
     val notifyBeforeStop: Boolean = true,
     val excludeSystemApps: Boolean = true,
     val smartAutoFreeze: Boolean = true,
-    val freezeXiaomiTelemetry: Boolean = false
+    val freezeXiaomiTelemetry: Boolean = false,
+    val freezeXiaomiInterconnect: Boolean = false,
+    val stopExceptionsIfOverThreshold: Boolean = false,
+    val exceptionDrainThresholdPercent: Float = 5.0f
 ) : AutomationConfigParams
 
 /**

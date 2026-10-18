@@ -249,6 +249,24 @@ class AutomationCoordinator @Inject constructor(
             }
         }
 
+        val oldFreezeInterconnect = old.appStopManagementParams.freezeXiaomiInterconnect
+        val newFreezeInterconnect = new.appStopManagementParams.freezeXiaomiInterconnect
+        if (oldFreezeInterconnect != newFreezeInterconnect) {
+            scope?.launch(Dispatchers.IO) {
+                val count = SystemActionBridge.setXiaomiInterconnectFrozen(newFreezeInterconnect)
+                Log.i(TAG, "🔗 [Interconnect] Cập nhật đóng băng Xiaomi Interconnect: $newFreezeInterconnect ($count packages)")
+            }
+        }
+
+        val oldDisableBgScanning = old.deepScreenOffParams.disableBackgroundScanning
+        val newDisableBgScanning = new.deepScreenOffParams.disableBackgroundScanning
+        if (oldDisableBgScanning != newDisableBgScanning) {
+            scope?.launch(Dispatchers.IO) {
+                SystemActionBridge.setBackgroundScanningDisabled(context, newDisableBgScanning)
+                Log.i(TAG, "📡 [BackgroundScanning] Cập nhật vô hiệu hóa quét nền: $newDisableBgScanning")
+            }
+        }
+
         if (new.appStopManagementParams.smartAutoFreeze) {
             updateRuleState(
                 AutomationRuleId.APP_STOP_MANAGEMENT,
@@ -790,6 +808,18 @@ class AutomationCoordinator @Inject constructor(
             }
         }
 
+        // 3. Tắt dữ liệu di động và dò quét Wi-Fi/BT ngầm khi tắt màn hình
+        if (deepParams.turnOffDataOnScreenOff) {
+            scope?.launch(Dispatchers.IO) {
+                SystemActionBridge.toggleMobileData(context, false)
+            }
+        }
+        if (deepParams.disableBackgroundScanning) {
+            scope?.launch(Dispatchers.IO) {
+                SystemActionBridge.setBackgroundScanningDisabled(context, true)
+            }
+        }
+
         val delayMin = deepParams.delayMinutes
         if (!deepParams.instantDeepDoze || isMusicActive) {
             updateRuleState(
@@ -838,6 +868,7 @@ class AutomationCoordinator @Inject constructor(
                 scope?.launch(Dispatchers.IO) {
                     // Nếu đang trong chế độ pin yếu, bảo toàn độ sáng tiết kiệm pin
                     if (isPowerSaverApplied) return@launch
+                    if (SystemActionBridge.isAutoBrightnessEnabled(context)) return@launch
 
                     val baseBrightness = cachedBrightnessForScreenOff ?: SystemActionBridge.getScreenBrightness(context)
                     lastPreBoostBrightness = baseBrightness
@@ -848,6 +879,18 @@ class AutomationCoordinator @Inject constructor(
                     lastBoostTimestamp = System.currentTimeMillis()
                     cachedBrightnessForScreenOff = null
                     SystemActionBridge.setScreenBrightness(context, targetBrightness)
+                }
+            }
+
+            // Khôi phục dữ liệu di động và dò quét ngầm nếu được bật
+            if (currentConfig.deepScreenOffParams.turnOffDataOnScreenOff) {
+                scope?.launch(Dispatchers.IO) {
+                    SystemActionBridge.toggleMobileData(context, true)
+                }
+            }
+            if (currentConfig.deepScreenOffParams.disableBackgroundScanning) {
+                scope?.launch(Dispatchers.IO) {
+                    SystemActionBridge.setBackgroundScanningDisabled(context, false)
                 }
             }
 

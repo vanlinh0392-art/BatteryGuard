@@ -35,7 +35,6 @@ class SettingsDataStore(private val context: Context) {
         private val KEY_EXCLUDE_SYSTEM_APPS = booleanPreferencesKey("exclude_system_apps")
         private val KEY_MONITORING_ENABLED = booleanPreferencesKey("is_monitoring_enabled")
         private val KEY_SETUP_COMPLETED = booleanPreferencesKey("is_setup_completed")
-        private val KEY_SHIZUKU_GRANTED = booleanPreferencesKey("shizuku_permission_granted")
         private val KEY_AUTO_START_SHIZUKU = booleanPreferencesKey("auto_start_shizuku")
         private val KEY_SHIZUKU_RETRY_MINUTES = intPreferencesKey("shizuku_retry_minutes")
 

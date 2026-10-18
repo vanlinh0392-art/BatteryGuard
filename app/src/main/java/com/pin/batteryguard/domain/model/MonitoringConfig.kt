@@ -17,7 +17,9 @@ data class MonitoringConfig(
     val excludeSystemApps: Boolean = true,
     val isMonitoringEnabled: Boolean = true,
     val enableAutoStartShizuku: Boolean = false,
-    val shizukuRetryMinutes: Int = 15
+    val shizukuRetryMinutes: Int = 15,
+    val stopExceptionsIfOverThreshold: Boolean = false,
+    val exceptionDrainThresholdPercent: Float = 5.0f
 ) {
     /**
      * Keep values safe even when they come from an older DataStore schema or
@@ -36,7 +38,8 @@ data class MonitoringConfig(
             requiredConsecutiveSamples = 1,
             monitoringPeriodMinutes = monitoringPeriodMinutes.coerceIn(10, 30),
             freezeThresholdPercent = freezeThresholdPercent.coerceIn(MIN_FORCE_STOP_PERCENT_PER_HOUR, MAX_FORCE_STOP_PERCENT_PER_HOUR),
-            shizukuRetryMinutes = shizukuRetryMinutes.coerceIn(10, 60)
+            shizukuRetryMinutes = shizukuRetryMinutes.coerceIn(10, 60),
+            exceptionDrainThresholdPercent = exceptionDrainThresholdPercent.coerceIn(MIN_EXCEPTION_DRAIN_PERCENT_PER_HOUR, MAX_EXCEPTION_DRAIN_PERCENT_PER_HOUR)
         )
     }
 
@@ -46,5 +49,7 @@ data class MonitoringConfig(
         const val MIN_CRITICAL_PERCENT_PER_HOUR = 0.5
         const val MAX_CRITICAL_PERCENT_PER_HOUR = 10.0
         const val THRESHOLD_GAP_PERCENT_PER_HOUR = 0.1
+        const val MIN_EXCEPTION_DRAIN_PERCENT_PER_HOUR = 1.0f
+        const val MAX_EXCEPTION_DRAIN_PERCENT_PER_HOUR = 10.0f
     }
 }

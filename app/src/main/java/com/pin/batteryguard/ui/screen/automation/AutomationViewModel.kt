@@ -242,7 +242,10 @@ class AutomationViewModel @Inject constructor(
                     notifyBeforeStop = monitoringConfig.notifyBeforeStop,
                     excludeSystemApps = monitoringConfig.excludeSystemApps,
                     smartAutoFreeze = config.appStopManagementParams.smartAutoFreeze,
-                    freezeXiaomiTelemetry = config.appStopManagementParams.freezeXiaomiTelemetry
+                    freezeXiaomiTelemetry = config.appStopManagementParams.freezeXiaomiTelemetry,
+                    freezeXiaomiInterconnect = config.appStopManagementParams.freezeXiaomiInterconnect,
+                    stopExceptionsIfOverThreshold = config.appStopManagementParams.stopExceptionsIfOverThreshold,
+                    exceptionDrainThresholdPercent = config.appStopManagementParams.exceptionDrainThresholdPercent
                 )
             )
         )

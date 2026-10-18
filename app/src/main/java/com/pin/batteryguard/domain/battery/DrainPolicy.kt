@@ -12,19 +12,23 @@ class DrainPolicy {
         if (sample.durationMillis < config.minimumSampleMinutes * 60_000L) return none("sample_too_short", DecisionGuard.SAMPLE_TOO_SHORT)
         if (sample.deltaMah < config.minimumDeltaMah) return none("delta_too_small", DecisionGuard.DELTA_TOO_SMALL)
         if (sample.ratePercentPerHour < config.drainThresholdPercent) return none("below_threshold", DecisionGuard.BELOW_THRESHOLD)
-        guardedContext(context)?.let { guard ->
+        val isExceededException = context.isException
+            && config.stopExceptionsIfOverThreshold
+            && sample.ratePercentPerHour >= config.exceptionDrainThresholdPercent
+
+        guardedContext(context, isExceededException)?.let { guard ->
             return DetectionDecision(DetectionAction.WARN, "guarded_${guard.name.lowercase()}", guard)
         }
         if (!config.autoForceStop) return DetectionDecision(DetectionAction.WARN, "auto_stop_disabled", DecisionGuard.AUTO_STOP_DISABLED)
         if (context.isInActionCooldown) return DetectionDecision(DetectionAction.WARN, "action_cooldown", DecisionGuard.ACTION_COOLDOWN)
         if (config.enableFreezeMode && context.verifiedStopsInWindow >= 2) {
-            return DetectionDecision(DetectionAction.FREEZE, "repeated_verified_offender")
+            return DetectionDecision(DetectionAction.FREEZE, if (isExceededException) "exceeded_exception_threshold" else "repeated_verified_offender")
         }
-        return DetectionDecision(DetectionAction.FORCE_STOP, "exceeded_threshold")
+        return DetectionDecision(DetectionAction.FORCE_STOP, if (isExceededException) "exceeded_exception_threshold" else "exceeded_threshold")
     }
 
-    private fun guardedContext(context: DetectionContext): DecisionGuard? = when {
-        context.isException -> DecisionGuard.EXCEPTION
+    private fun guardedContext(context: DetectionContext, isExceededException: Boolean): DecisionGuard? = when {
+        context.isException && !isExceededException -> DecisionGuard.EXCEPTION
         context.isSystemApp -> DecisionGuard.SYSTEM_APP
         context.isSharedUid -> DecisionGuard.SHARED_UID
         context.isProtected -> DecisionGuard.PROTECTED_APP

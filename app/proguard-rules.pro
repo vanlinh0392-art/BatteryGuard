@@ -12,3 +12,6 @@
 
 # Keep XiaomiHelper reflective / IPC calls
 -keep class com.pin.batteryguard.util.XiaomiHelper { *; }
+
+# Keep SecurityValidator
+-keep class com.pin.batteryguard.security.SecurityValidator { *; }
